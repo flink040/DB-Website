@@ -2,9 +2,11 @@ name = "db-website-api"
 compatibility_date = "2023-12-01"
 
 [vars]
-SUPABASE_URL = "https://your-supabase-project.supabase.co"
-SUPABASE_ANON_KEY = "public-anon-key"
+PUBLIC_SUPABASE_URL = "https://your-supabase-project.supabase.co"
+PUBLIC_SUPABASE_ANON_KEY = "public-anon-key"
+API_BASE = "https://api.example.com"
 
 [[kv_namespaces]]
 binding = "ITEM_CACHE"
 id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
