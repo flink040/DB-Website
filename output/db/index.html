@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OP-Item Datenbank</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <svg aria-hidden="true" style="position: absolute; width: 0; height: 0; overflow: hidden">
+      <symbol id="icon-search" viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.71.71l.27.28v.79l5 5a1 1 0 0 0 1.41-1.41zm-6 0a4.5 4.5 0 1 1 4.5-4.5 4.5 4.5 0 0 1-4.5 4.5"
+        />
+      </symbol>
+      <symbol id="icon-filter" viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M3 5a1 1 0 0 1 1-1h16a1 1 0 0 1 .8 1.6l-5.2 6.93V19a1 1 0 0 1-.55.89l-4 2A1 1 0 0 1 9 21v-7.47L3.2 5.6A1 1 0 0 1 3 5"
+        />
+      </symbol>
+      <symbol id="icon-user" viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M12 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12m0 14c4.2 0 8 1.89 8 4.2V22H4v-1.8C4 17.89 7.8 16 12 16"
+        />
+      </symbol>
+    </svg>
+
+    <div class="app-shell">
+      <aside class="sidebar" data-collapsed="false">
+        <div class="sidebar__header">
+          <button
+            class="sidebar__toggle"
+            type="button"
+            aria-label="Navigation ein-/ausklappen"
+            aria-expanded="true"
+          >
+            ☰
+          </button>
+          <span class="sidebar__title">OP&nbsp;Tools</span>
+        </div>
+        <nav class="sidebar__nav" aria-label="Hauptnavigation">
+          <a class="sidebar__link" href="#">
+            <span class="sidebar__icon" aria-hidden="true">🏠</span>
+            <span class="sidebar__text">Startseite</span>
+          </a>
+          <a class="sidebar__link is-active" href="#" aria-current="page">
+            <span class="sidebar__icon" aria-hidden="true">📦</span>
+            <span class="sidebar__text">OP-Item Datenbank</span>
+          </a>
+        </nav>
+      </aside>
+
+      <div class="main-area">
+        <header class="topbar">
+          <div class="topbar__spacer" aria-hidden="true"></div>
+          <div class="topbar__actions">
+            <button
+              class="avatar-button"
+              type="button"
+              id="avatarButton"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-label="Benutzerkonto"
+            >
+              <span class="avatar-button__inner" aria-hidden="true">
+                <svg class="icon" data-icon="user" focusable="false" aria-hidden="true"></svg>
+              </span>
+            </button>
+          </div>
+          <div class="dropdown" id="avatarDropdown" role="menu" aria-labelledby="avatarButton" hidden>
+            <div class="dropdown__content" role="none">
+              <button class="dropdown__item" type="button" data-action="login" role="menuitem">
+                Mit Discord anmelden
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main class="content" role="main">
+          <section class="search-panel" aria-label="Item Suche">
+            <form class="search-form" id="searchForm" role="search">
+              <label class="visually-hidden" for="searchInput">Item suchen</label>
+              <div class="search-form__field">
+                <span class="search-form__icon" aria-hidden="true">
+                  <svg class="icon" data-icon="search" focusable="false"></svg>
+                </span>
+                <input
+                  id="searchInput"
+                  name="search"
+                  type="search"
+                  placeholder="Item suchen…"
+                  autocomplete="off"
+                  aria-label="Item suchen"
+                />
+                <button
+                  class="search-form__filter"
+                  type="button"
+                  id="filterButton"
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                  aria-controls="filterPopover"
+                >
+                  <svg class="icon" data-icon="filter" focusable="false"></svg>
+                  <span class="visually-hidden">Filter öffnen</span>
+                </button>
+              </div>
+            </form>
+            <div class="search-panel__actions">
+              <button class="button button--primary" id="addItemButton" type="button">
+                Item hinzufügen
+              </button>
+              <p class="search-panel__result" id="resultInfo" aria-live="polite"></p>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div class="popover" id="filterPopover" role="dialog" aria-modal="false" hidden>
+      <form id="filterForm" class="popover__form">
+        <header class="popover__header">
+          <h2>Filter</h2>
+          <button class="popover__close" type="button" data-close-filter aria-label="Filter schließen">×</button>
+        </header>
+        <div class="popover__body">
+          <label class="field">
+            <span class="field__label">Item-Art</span>
+            <select name="item_type" aria-label="Item-Art auswählen">
+              <option value="">Alle</option>
+              <option value="sword">Sword</option>
+              <option value="axe">Axe</option>
+              <option value="bow">Bow</option>
+              <option value="armor">Armor</option>
+              <option value="tool">Tool</option>
+              <option value="trinket">Trinket</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">Seltenheit</span>
+            <select name="rarity" aria-label="Seltenheit auswählen">
+              <option value="">Alle</option>
+              <option value="common">Common</option>
+              <option value="rare">Rare</option>
+              <option value="epic">Epic</option>
+              <option value="legendary">Legendary</option>
+              <option value="mythic">Mythic</option>
+            </select>
+          </label>
+        </div>
+        <footer class="popover__footer">
+          <button class="button button--ghost" type="button" id="resetFilters">Zurücksetzen</button>
+          <button class="button button--primary" type="submit">Übernehmen</button>
+        </footer>
+      </form>
+    </div>
+
+    <div class="modal" id="itemModal" role="dialog" aria-modal="true" aria-labelledby="itemModalTitle" hidden>
+      <div class="modal__backdrop" data-modal-close></div>
+      <div class="modal__dialog" role="document">
+        <header class="modal__header">
+          <h2 id="itemModalTitle">Item hinzufügen</h2>
+          <button class="modal__close" type="button" aria-label="Modal schließen" data-modal-close>
+            ×
+          </button>
+        </header>
+        <form class="modal__form" id="itemForm">
+          <div class="form-grid">
+            <label class="field">
+              <span class="field__label">Name</span>
+              <input type="text" name="name" required autocomplete="off" />
+            </label>
+            <label class="field">
+              <span class="field__label">Item-Art</span>
+              <select name="item_type" required>
+                <option value="" disabled selected hidden>Bitte wählen</option>
+                <option value="sword">Sword</option>
+                <option value="axe">Axe</option>
+                <option value="bow">Bow</option>
+                <option value="armor">Armor</option>
+                <option value="tool">Tool</option>
+                <option value="trinket">Trinket</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Seltenheit</span>
+              <select name="rarity" required>
+                <option value="" disabled selected hidden>Bitte wählen</option>
+                <option value="common">Common</option>
+                <option value="uncommon">Uncommon</option>
+                <option value="rare">Rare</option>
+                <option value="epic">Epic</option>
+                <option value="legendary">Legendary</option>
+                <option value="mythic">Mythic</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Stern-Level</span>
+              <input type="number" name="star_level" min="0" step="1" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label">Preis</span>
+              <input type="number" name="price" min="0" step="0.01" placeholder="Optional" />
+            </label>
+            <label class="field">
+              <span class="field__label">Bild-URL</span>
+              <input type="url" name="image_url" placeholder="https://…" />
+            </label>
+          </div>
+          <fieldset class="field field--enchantments">
+            <legend class="field__label">Verzauberungen</legend>
+            <p class="field__hint" id="enchantmentHint">
+              Lade Verzauberungen…
+            </p>
+            <div class="enchantments" id="enchantmentsList" role="group" aria-labelledby="enchantmentHint"></div>
+          </fieldset>
+          <div class="modal__actions">
+            <button class="button button--ghost" type="button" data-modal-close>Abbrechen</button>
+            <button class="button button--primary" type="submit" id="modalSubmit">Speichern</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="profile-panel" id="profilePanel" role="dialog" aria-modal="false" hidden>
+      <div class="profile-panel__content">
+        <h3>Profil</h3>
+        <dl>
+          <div>
+            <dt>E-Mail</dt>
+            <dd id="profileEmail">-</dd>
+          </div>
+          <div>
+            <dt>User-ID</dt>
+            <dd id="profileId">-</dd>
+          </div>
+        </dl>
+        <button class="button button--ghost" type="button" data-close-profile>Schließen</button>
+      </div>
+    </div>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="false"></div>
+
+    <script>
+      // TODO: Hier PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY und optional API_BASE eintragen.
+      window.ENV = window.ENV || {
+        PUBLIC_SUPABASE_URL: "",
+        PUBLIC_SUPABASE_ANON_KEY: "",
+        API_BASE: ""
+      };
+    </script>
+    <script type="module" src="./app.js"></script>
+
+    <!--
+      README-Snippet:
+      - Lokales Preview: `wrangler pages dev ./output`
+      - Vor dem Deploy `PUBLIC_SUPABASE_URL` und `PUBLIC_SUPABASE_ANON_KEY` in window.ENV setzen.
+      - Discord OAuth Redirect-URL in Supabase/Discord auf `https://<deine-domain>/db/` (bzw. lokal `http://127.0.0.1:8788/db/`) konfigurieren.
+    -->
+  </body>
+</html>
