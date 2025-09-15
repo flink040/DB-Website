@@ -6,18 +6,12 @@ import {
   withCache,
   type CacheEnv,
 } from '../../lib/cache';
+import { parseLimit } from '../../lib/request-params';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
 type Env = SupabaseEnv & CacheEnv;
-
-const parseLimit = (value: string | null): number => {
-  if (!value) return DEFAULT_LIMIT;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_LIMIT;
-  return Math.min(Math.floor(parsed), MAX_LIMIT);
-};
 
 const escapeForILike = (value: string): string =>
   value.replace(/[%_]/g, (match) => `\\${match}`);
@@ -38,7 +32,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     return jsonError('Query parameter "q" is required', 400);
   }
 
-  const limit = parseLimit(url.searchParams.get('limit'));
+  const limit = parseLimit(
+    url.searchParams.get('limit'),
+    DEFAULT_LIMIT,
+    MAX_LIMIT
+  );
   const typeFilter = url.searchParams.get('type')?.trim() || null;
   const rarityFilter = url.searchParams.get('rarity')?.trim() || null;
 
