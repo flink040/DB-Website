@@ -1,36 +1,25 @@
 name = "db-website-api"
 compatibility_date = "2023-12-01"
+pages_build_output_dir = "./public"
 
 [vars]
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 PUBLIC_SUPABASE_URL = "https://your-supabase-project.supabase.co"
 PUBLIC_SUPABASE_ANON_KEY = "public-anon-key"
 API_BASE = "https://api.example.com"
-=======
-SUPABASE_URL = "https://taejvzqmlswbgsknthxz.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhZWp2enFtbHN3Ymdza250aHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNTE3NjIsImV4cCI6MjA3MjkyNzc2Mn0.nFWly256mUiFAvAEWdvLA9n_DaNXOnV3MtMLXmHIKGc"
->>>>>>> Stashed changes
-=======
-SUPABASE_URL = "https://taejvzqmlswbgsknthxz.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhZWp2enFtbHN3Ymdza250aHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNTE3NjIsImV4cCI6MjA3MjkyNzc2Mn0.nFWly256mUiFAvAEWdvLA9n_DaNXOnV3MtMLXmHIKGc"
->>>>>>> Stashed changes
+SUPABASE_URL = "{{ secret:SUPABASE_URL }}"
+SUPABASE_ANON_KEY = "{{ secret:SUPABASE_ANON_KEY }}"
+DISCORD_CLIENT_ID = "{{ secret:DISCORD_CLIENT_ID }}"
+DISCORD_CLIENT_SECRET = "{{ secret:DISCORD_CLIENT_SECRET }}"
+DISCORD_REDIRECT_URI = "{{ secret:DISCORD_REDIRECT_URI }}"
 
-# Falls du Discord OAuth über Worker laufen lassen willst, brauchst du zusätzlich:
-DISCORD_CLIENT_ID = "1414567063221178429"
-DISCORD_CLIENT_SECRET = "5f065bc8568f6d3a030d054b82c6cba7d999c080ff2de485aadc2d77bfc9a167"
-DISCORD_REDIRECT_URI = "https://op-item-db.pages.dev/callback" 
+# Configure the sensitive values above via Wrangler secrets:
+#   wrangler secret put SUPABASE_URL
+#   wrangler secret put SUPABASE_ANON_KEY
+#   wrangler secret put DISCORD_CLIENT_ID
+#   wrangler secret put DISCORD_CLIENT_SECRET
+#   wrangler secret put DISCORD_REDIRECT_URI
 
-# Beispiel KV für Caching (optional)
 [[kv_namespaces]]
 binding = "ITEM_CACHE"
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
-=======
-id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
->>>>>>> Stashed changes
-=======
-id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
->>>>>>> Stashed changes
