@@ -1,11 +1,11 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { getSupabaseClient, type SupabaseEnv } from '../../lib/supabase';
+import { getSupabaseClient, type SupabaseEnv } from '../../../lib/supabase';
 import {
   jsonError,
   preflightResponse,
   withCache,
   type CacheEnv,
-} from '../../lib/cache';
+} from '../../../lib/cache';
 
 type Env = SupabaseEnv & CacheEnv;
 
