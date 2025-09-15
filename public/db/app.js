@@ -1,1024 +1,825 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const qs = (selector, scope = document) => scope.querySelector(selector);
-const qsa = (selector, scope = document) => Array.from(scope.querySelectorAll(selector));
-const debounce = (fn, delay = 300) => {
-  let timer;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn.apply(null, args), delay);
-  };
-};
-
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-const env = window.ENV || {};
-let supabaseClient = null;
-
-if (env.PUBLIC_SUPABASE_URL && env.PUBLIC_SUPABASE_ANON_KEY) {
-  supabaseClient = createClient(env.PUBLIC_SUPABASE_URL, env.PUBLIC_SUPABASE_ANON_KEY);
-} else {
-  console.info(
-    "Supabase ENV Variablen fehlen. TODO: PUBLIC_SUPABASE_URL und PUBLIC_SUPABASE_ANON_KEY setzen."
-  );
-}
-
-const state = {
-  user: null,
-  sidebarCollapsed: false,
-  filters: {
-    item_type: "",
-    rarity: ""
-  },
-  searchQuery: "",
-  resultsCount: null,
-  searchLoading: false,
-  enchantments: [],
-  isFilterOpen: false,
-  isProfileOpen: false,
-  modalOpen: false,
-  missingBackendNotified: false
-};
-
-const iconCache = new Map();
-
-const applyIconMarkup = (el, data) => {
-  if (!data) return;
-  ["viewBox", "width", "height"].forEach((attr) => {
-    if (!data.attrs?.[attr]) {
-      el.removeAttribute(attr);
-    }
-  });
-  el.innerHTML = data.markup;
-  Object.entries(data.attrs || {}).forEach(([key, value]) => {
-    if (value) {
-      el.setAttribute(key, value);
-    }
-  });
-};
-let filterOutsideHandler = null;
-let dropdownOutsideHandler = null;
-let profileOutsideHandler = null;
-let modalKeyHandler = null;
-let profileKeyHandler = null;
-let currentSearchToken = 0;
+const PAGE_SIZE = 12;
 
 const elements = {
-  sidebar: qs(".sidebar"),
-  sidebarToggle: qs(".sidebar__toggle"),
-  avatarButton: qs("#avatarButton"),
-  avatarDropdown: qs("#avatarDropdown"),
-  dropdownContent: qs("#avatarDropdown .dropdown__content"),
-  searchInput: qs("#searchInput"),
-  searchForm: qs("#searchForm"),
-  filterButton: qs("#filterButton"),
-  filterPopover: qs("#filterPopover"),
-  filterForm: qs("#filterForm"),
-  resetFilters: qs("#resetFilters"),
-  filterClose: qs("[data-close-filter]"),
-  resultInfo: qs("#resultInfo"),
-  addItemButton: qs("#addItemButton"),
-  itemModal: qs("#itemModal"),
-  itemForm: qs("#itemForm"),
-  modalCloseTriggers: qsa("[data-modal-close]"),
-  enchantmentsList: qs("#enchantmentsList"),
-  enchantmentHint: qs("#enchantmentHint"),
-  modalSubmit: qs("#modalSubmit"),
-  toastRegion: qs("#toastRegion"),
-  profilePanel: qs("#profilePanel"),
-  profileEmail: qs("#profileEmail"),
-  profileId: qs("#profileId"),
-  profileClose: qs("[data-close-profile]")
+  searchForm: document.getElementById('searchForm'),
+  searchInput: document.getElementById('searchInput'),
+  typeFilter: document.getElementById('typeFilter'),
+  rarityFilter: document.getElementById('rarityFilter'),
+  resultInfo: document.getElementById('resultInfo'),
+  cardGrid: document.getElementById('cardGrid'),
+  loadMoreButton: document.getElementById('loadMoreButton'),
+  detailView: document.getElementById('detailView'),
+  detailMedia: document.getElementById('detailMedia'),
+  detailImage: document.getElementById('detailImage'),
+  detailFallback: document.getElementById('detailFallback'),
+  detailTitle: document.getElementById('detailTitle'),
+  detailSubtitle: document.getElementById('detailSubtitle'),
+  detailStars: document.getElementById('detailStars'),
+  detailRarity: document.getElementById('detailRarity'),
+  detailType: document.getElementById('detailType'),
+  detailReleaseRelative: document.getElementById('detailReleaseRelative'),
+  detailReleaseAbsolute: document.getElementById('detailReleaseAbsolute'),
+  detailDescriptionSection: document.getElementById('detailDescriptionSection'),
+  detailDescription: document.getElementById('detailDescription'),
+  detailPropertiesSection: document.getElementById('detailPropertiesSection'),
+  detailProperties: document.getElementById('detailProperties'),
+  detailEnchantmentsSection: document.getElementById('detailEnchantmentsSection'),
+  detailEnchantments: document.getElementById('detailEnchantments'),
+  detailStatus: document.getElementById('detailStatus')
 };
 
-const setResultInfo = () => {
-  if (!elements.resultInfo) return;
-  if (state.searchLoading) {
-    elements.resultInfo.textContent = "Suche läuft…";
-    return;
-  }
+const state = {
+  mode: 'list',
+  items: [],
+  nextCursor: null,
+  hasMore: false,
+  searchResults: [],
+  searchHasMore: false,
+  searchQuery: '',
+  searchPage: 0,
+  filters: {
+    type: '',
+    rarity: ''
+  },
+  loading: false,
+  error: '',
+  lastListToken: 0,
+  lastSearchToken: 0,
+  detailToken: 0,
+  activeDetailId: null,
+  lastFocusedElement: null
+};
 
-  if (state.resultsCount === null) {
-    elements.resultInfo.textContent = "Ergebnisse erscheinen hier…";
-    return;
-  }
+const debounce = (fn, delay = 300) => {
+  let timer = null;
+  const debounced = (...args) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => fn.apply(null, args), delay);
+  };
+  debounced.cancel = () => {
+    window.clearTimeout(timer);
+  };
+  return debounced;
+};
 
-  const count = state.resultsCount;
-  if (typeof count === "number") {
-    elements.resultInfo.textContent = count === 0 ? "Keine Ergebnisse gefunden" : `${count} Ergebnisse gefunden`;
+const filtersApplied = () => Boolean(state.filters.type || state.filters.rarity);
+
+const normalizeFilterValue = (value) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const formatLabel = (value) => {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized) return 'Unbekannt';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const getStarLevel = (item) => {
+  const candidates = [item?.star_level, item?.starLevel, item?.stars, item?.starlevel];
+  for (const candidate of candidates) {
+    const num = Number(candidate);
+    if (Number.isFinite(num) && num >= 0) {
+      return num;
+    }
+  }
+  return 0;
+};
+
+const getInitial = (value) => {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim().charAt(0).toUpperCase();
+  }
+  return '★';
+};
+
+const renderStars = (container, value) => {
+  if (!container) return;
+  const maxVisual = 5;
+  const total = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  const clamped = Math.min(total, maxVisual);
+  const filled = Array.from({ length: clamped }, () => '★');
+  const empty = Array.from({ length: maxVisual - clamped }, () => '☆');
+  container.dataset.count = String(total);
+  container.textContent = [...filled, ...empty].join(' ');
+  const ariaLabel = total === 0 ? 'Keine Sterne vergeben' : `${total} ${total === 1 ? 'Stern' : 'Sterne'}`;
+  container.setAttribute('aria-label', ariaLabel);
+  if (total > maxVisual) {
+    container.textContent += ` +${total - maxVisual}`;
   }
 };
 
-const toast = (message, options = {}) => {
-  const region = elements.toastRegion;
-  if (!region) return;
-  const { duration = 4500 } = options;
-  const toastEl = document.createElement("div");
-  toastEl.className = "toast";
-  toastEl.setAttribute("role", "alert");
+const applyFilters = (items) => {
+  const typeFilter = normalizeFilterValue(state.filters.type);
+  const rarityFilter = normalizeFilterValue(state.filters.rarity);
 
-  const msg = document.createElement("div");
-  msg.className = "toast__message";
-  msg.textContent = message;
-  toastEl.appendChild(msg);
+  if (!typeFilter && !rarityFilter) return items;
 
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "toast__close";
-  close.setAttribute("aria-label", "Toast schließen");
-  close.textContent = "×";
-  close.addEventListener("click", () => removeToast(toastEl));
-  toastEl.appendChild(close);
-
-  region.appendChild(toastEl);
-  requestAnimationFrame(() => {
-    toastEl.dataset.show = "true";
+  return items.filter((item) => {
+    const itemType = normalizeFilterValue(item?.type);
+    const itemRarity = normalizeFilterValue(item?.rarity);
+    const matchesType = !typeFilter || itemType === typeFilter;
+    const matchesRarity = !rarityFilter || itemRarity === rarityFilter;
+    return matchesType && matchesRarity;
   });
-
-  let hideTimeout = setTimeout(() => removeToast(toastEl), duration);
-  const pause = () => {
-    if (!hideTimeout) return;
-    clearTimeout(hideTimeout);
-    hideTimeout = null;
-  };
-  const resume = () => {
-    if (hideTimeout) return;
-    hideTimeout = setTimeout(() => removeToast(toastEl), 1600);
-  };
-
-  toastEl.addEventListener("mouseenter", pause);
-  toastEl.addEventListener("mouseleave", resume);
 };
 
-const removeToast = (toastEl) => {
-  if (!toastEl) return;
-  toastEl.dataset.show = "false";
-  setTimeout(() => toastEl.remove(), 160);
-};
+const updateStatusMessage = () => {
+  const info = elements.resultInfo;
+  if (!info) return;
 
-const inlineExternalIcons = async () => {
-  const iconElements = qsa(".icon[data-icon]");
-  await Promise.all(
-    iconElements.map(async (el) => {
-      const name = el.dataset.icon;
-      if (!name) return;
-      el.innerHTML = `<use href="#icon-${name}"></use>`;
-      const cached = iconCache.get(name);
-      if (cached) {
-        applyIconMarkup(el, cached);
-        return;
+  let message = '';
+
+  if (state.error) {
+    message = state.error;
+  } else {
+    const source = state.mode === 'search' ? state.searchResults : state.items;
+    const filtered = applyFilters(source);
+    const filterActive = filtersApplied();
+
+    if (state.loading && source.length === 0) {
+      message = 'Lade Items…';
+    } else if (source.length === 0) {
+      if (state.mode === 'search') {
+        const query = state.searchQuery.trim();
+        message = query ? `Keine Treffer für „${query}“.` : 'Keine Treffer gefunden.';
+      } else {
+        message = 'Noch keine Items vorhanden.';
       }
+    } else if (filtered.length === 0) {
+      message = filterActive ? 'Keine Items für die aktuellen Filter.' : 'Keine Items gefunden.';
+    } else if (state.mode === 'search') {
+      const query = state.searchQuery.trim();
+      const suffix = filterActive ? ' (gefiltert)' : '';
+      message = `${filtered.length} Treffer${query ? ` für „${query}“` : ''}${suffix}.`;
+    } else {
+      const label = filtered.length === 1 ? 'Item' : 'Items';
+      message = filterActive
+        ? `${filtered.length} von ${source.length} ${label} nach Filtern.`
+        : `${filtered.length} ${label} geladen.`;
+    }
+  }
 
-      try {
-        const response = await fetch(`../assets/icons/${name}.svg`, { cache: "force-cache" });
-        if (!response.ok) throw new Error("Icon nicht gefunden");
-        const text = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(text, "image/svg+xml");
-        const svgNode = doc.querySelector("svg");
-        const iconData = svgNode
-          ? {
-              markup: svgNode.innerHTML,
-              attrs: ["viewBox", "width", "height"].reduce((acc, attr) => {
-                const value = svgNode.getAttribute(attr);
-                if (value) acc[attr] = value;
-                return acc;
-              }, {})
-            }
-          : { markup: text, attrs: {} };
-        iconCache.set(name, iconData);
-        applyIconMarkup(el, iconData);
-      } catch (error) {
-        // fallback already injected
-        const fallback = {
-          markup: `<use href="#icon-${name}"></use>`,
-          attrs: {}
-        };
-        iconCache.set(name, fallback);
-        applyIconMarkup(el, fallback);
+  if (state.loading && message && message !== 'Lade Items…' && !state.error) {
+    message = `${message} (aktualisiere…)`;
+  }
+
+  info.textContent = message;
+};
+
+const updateLoadMoreButton = () => {
+  const button = elements.loadMoreButton;
+  if (!button) return;
+  const hasMore = state.mode === 'search' ? state.searchHasMore : state.hasMore;
+  if (!hasMore) {
+    button.hidden = true;
+    button.disabled = true;
+    return;
+  }
+  button.hidden = false;
+  button.disabled = state.loading;
+  button.textContent = state.loading ? 'Lädt…' : 'Mehr laden';
+};
+
+const createCard = (item) => {
+  const id = item?.id;
+  const wrapper = document.createElement('div');
+  wrapper.setAttribute('role', 'listitem');
+
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'item-card';
+  if (id) {
+    card.dataset.itemId = id;
+  }
+
+  const media = document.createElement('figure');
+  media.className = 'item-card__media';
+  const img = document.createElement('img');
+  const placeholder = document.createElement('div');
+  placeholder.className = 'item-card__placeholder';
+
+  const imageUrl = typeof item?.image_url === 'string' ? item.image_url.trim() : '';
+  if (imageUrl) {
+    img.src = imageUrl;
+    img.alt = item?.name ? `Bild von ${item.name}` : 'Item Bild';
+  } else {
+    media.dataset.empty = 'true';
+    placeholder.textContent = getInitial(item?.name);
+    img.alt = '';
+  }
+
+  media.appendChild(img);
+  media.appendChild(placeholder);
+
+  const body = document.createElement('div');
+  body.className = 'item-card__body';
+
+  const title = document.createElement('h3');
+  title.className = 'item-card__title';
+  title.textContent = item?.name ?? 'Unbekanntes Item';
+
+  const meta = document.createElement('div');
+  meta.className = 'item-card__meta';
+
+  const rarity = document.createElement('span');
+  rarity.className = 'rarity-badge';
+  const rarityValue = normalizeFilterValue(item?.rarity);
+  rarity.dataset.rarity = rarityValue;
+  rarity.textContent = formatLabel(item?.rarity);
+
+  const type = document.createElement('span');
+  type.className = 'item-card__type';
+  type.textContent = formatLabel(item?.type);
+
+  meta.append(rarity, type);
+
+  const stars = document.createElement('div');
+  stars.className = 'item-card__stars';
+  renderStars(stars, getStarLevel(item));
+
+  body.append(title, meta, stars);
+  card.append(media, body);
+
+  card.addEventListener('click', () => {
+    if (id) {
+      openDetail(id);
+    }
+  });
+
+  wrapper.appendChild(card);
+  return wrapper;
+};
+
+const renderGrid = () => {
+  const grid = elements.cardGrid;
+  if (!grid) return;
+  const source = state.mode === 'search' ? state.searchResults : state.items;
+  const filtered = applyFilters(source);
+  delete grid.dataset.state;
+  grid.innerHTML = '';
+
+  if (!filtered.length) {
+    grid.dataset.state = 'empty';
+    const message = document.createElement('p');
+    message.className = 'empty-message';
+    if (state.loading && source.length === 0) {
+      message.textContent = 'Lade Items…';
+    } else if (state.error) {
+      message.textContent = state.error;
+    } else if (filtersApplied() && source.length > 0) {
+      message.textContent = 'Keine Items für die aktuellen Filter.';
+    } else if (state.mode === 'search') {
+      const query = state.searchQuery.trim();
+      message.textContent = query ? `Keine Treffer für „${query}“.` : 'Keine Treffer gefunden.';
+    } else {
+      message.textContent = 'Noch keine Items vorhanden.';
+    }
+    grid.appendChild(message);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  filtered.forEach((item) => {
+    fragment.appendChild(createCard(item));
+  });
+  grid.appendChild(fragment);
+};
+
+const render = () => {
+  renderGrid();
+  updateStatusMessage();
+  updateLoadMoreButton();
+};
+
+const setLoading = (value) => {
+  state.loading = value;
+  updateLoadMoreButton();
+  updateStatusMessage();
+};
+
+const loadItems = async ({ reset = false } = {}) => {
+  const token = ++state.lastListToken;
+
+  if (reset) {
+    state.items = [];
+    state.nextCursor = null;
+    state.hasMore = false;
+    render();
+  }
+
+  setLoading(true);
+
+  const params = new URLSearchParams();
+  params.set('limit', String(PAGE_SIZE));
+  if (!reset && state.nextCursor) {
+    params.set('cursor', state.nextCursor);
+  }
+
+  try {
+    const response = await fetch(`/api/items?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (token !== state.lastListToken) return;
+
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    state.items = reset ? items : [...state.items, ...items];
+    state.nextCursor = payload?.nextCursor ?? null;
+    state.hasMore = Boolean(payload?.nextCursor);
+    state.error = '';
+  } catch (error) {
+    if (token === state.lastListToken) {
+      if (reset) {
+        state.items = [];
       }
-    })
-  );
+      state.hasMore = false;
+      state.error = 'Items konnten nicht geladen werden.';
+      console.error(error);
+    }
+  } finally {
+    if (token === state.lastListToken) {
+      setLoading(false);
+      render();
+    }
+  }
 };
 
-const initSidebarState = () => {
-  const stored = localStorage.getItem("sidebarCollapsed");
-  const prefersCollapsed = window.matchMedia("(max-width: 1024px)").matches;
-  state.sidebarCollapsed = stored !== null ? stored === "true" : prefersCollapsed;
-  applySidebarState(true);
-};
+const searchItems = async ({ page, reset }) => {
+  const query = state.searchQuery.trim();
+  if (!query) return;
+  const token = ++state.lastSearchToken;
 
-const applySidebarState = (isInitial = false) => {
-  if (!elements.sidebar || !elements.sidebarToggle) return;
-  elements.sidebar.dataset.collapsed = String(state.sidebarCollapsed);
-  elements.sidebarToggle.setAttribute("aria-expanded", String(!state.sidebarCollapsed));
-  elements.sidebarToggle.textContent = state.sidebarCollapsed ? "☰" : "×";
-  if (!isInitial) {
-    localStorage.setItem("sidebarCollapsed", String(state.sidebarCollapsed));
+  if (reset) {
+    state.searchResults = [];
+    state.searchHasMore = false;
+    render();
+  }
+
+  setLoading(true);
+
+  const params = new URLSearchParams();
+  params.set('q', query);
+  params.set('limit', String(PAGE_SIZE * page));
+
+  try {
+    const response = await fetch(`/api/search?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (token !== state.lastSearchToken) return;
+
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    state.searchResults = items;
+    const count = Number(payload?.count ?? items.length);
+    state.searchHasMore = Number.isFinite(count) ? count >= PAGE_SIZE * page : items.length >= PAGE_SIZE * page;
+    state.searchPage = page;
+    state.error = '';
+  } catch (error) {
+    if (token === state.lastSearchToken) {
+      if (reset) {
+        state.searchResults = [];
+        state.searchPage = 0;
+      }
+      state.searchHasMore = false;
+      state.error = 'Suche fehlgeschlagen.';
+      console.error(error);
+    }
+  } finally {
+    if (token === state.lastSearchToken) {
+      setLoading(false);
+      render();
+    }
   }
 };
 
-const toggleSidebar = () => {
-  state.sidebarCollapsed = !state.sidebarCollapsed;
-  applySidebarState();
+const triggerSearch = (reset) => {
+  const query = state.searchQuery.trim();
+  if (!query) return;
+  const nextPage = reset ? 1 : state.searchPage + 1;
+  searchItems({ page: nextPage, reset });
 };
 
-const updateFilterButtonState = () => {
-  if (!elements.filterButton) return;
-  const hasFilter = Boolean(state.filters.item_type || state.filters.rarity);
-  elements.filterButton.dataset.active = hasFilter ? "true" : "false";
-};
+const formatRelativeDate = (input) => {
+  if (!input) return null;
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return null;
 
-const openFilterPopover = () => {
-  if (!elements.filterPopover) return;
-  if (!elements.filterButton) return;
-  if (state.isFilterOpen) return;
+  const now = new Date();
+  const diff = date.getTime() - now.getTime();
+  const seconds = Math.round(diff / 1000);
+  const rtf = new Intl.RelativeTimeFormat('de', { numeric: 'auto' });
 
-  state.isFilterOpen = true;
-  const popover = elements.filterPopover;
-  if (elements.filterForm) {
-    if (elements.filterForm.item_type) {
-      elements.filterForm.item_type.value = state.filters.item_type;
+  const divisions = [
+    { amount: 60, unit: 'second' },
+    { amount: 60, unit: 'minute' },
+    { amount: 24, unit: 'hour' },
+    { amount: 7, unit: 'day' },
+    { amount: 4.34524, unit: 'week' },
+    { amount: 12, unit: 'month' },
+    { amount: Number.POSITIVE_INFINITY, unit: 'year' }
+  ];
+
+  let duration = seconds;
+  let unit = 'second';
+
+  for (const division of divisions) {
+    if (Math.abs(duration) < division.amount) {
+      unit = division.unit;
+      break;
     }
-    if (elements.filterForm.rarity) {
-      elements.filterForm.rarity.value = state.filters.rarity;
+    duration /= division.amount;
+  }
+
+  duration = Math.round(duration);
+  return rtf.format(duration, unit);
+};
+
+const formatAbsoluteDate = (input) => {
+  if (!input) return '';
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return String(input);
+  return new Intl.DateTimeFormat('de-DE', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(date);
+};
+
+const formatFieldLabel = (key) => {
+  if (!key) return '';
+  if (key.toLowerCase() === 'id') return 'ID';
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+};
+
+const formatValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'boolean') return value ? 'Ja' : 'Nein';
+  if (value instanceof Date) return formatAbsoluteDate(value.toISOString());
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (typeof entry === 'string' ? entry : JSON.stringify(entry)))
+      .join(', ');
+  }
+  if (typeof value === 'object') {
+    return '';
+  }
+  return String(value);
+};
+
+const resolveEnchantmentName = (enchantment) => {
+  if (!enchantment || typeof enchantment !== 'object') return 'Unbekannte Verzauberung';
+  const candidates = [
+    enchantment.display_name,
+    enchantment.localized_name,
+    enchantment.translation,
+    enchantment.name,
+    enchantment.title
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
     }
   }
-  popover.hidden = false;
-  requestAnimationFrame(() => {
-    const rect = elements.filterButton.getBoundingClientRect();
-    const preferredTop = rect.bottom + 12;
-    const preferredLeft = rect.right - popover.offsetWidth;
-    const top = Math.min(
-      preferredTop,
-      window.innerHeight - popover.offsetHeight - 16
-    );
-    const left = Math.max(16, Math.min(preferredLeft, window.innerWidth - popover.offsetWidth - 16));
-    popover.style.top = `${Math.max(16, top)}px`;
-    popover.style.left = `${left}px`;
-    popover.dataset.open = "true";
-    const focusable = popover.querySelector(FOCUSABLE_SELECTOR);
-    focusable?.focus();
-  });
-
-  elements.filterButton?.setAttribute("aria-expanded", "true");
-
-  filterOutsideHandler = (event) => {
-    if (
-      !elements.filterPopover.contains(event.target) &&
-      !elements.filterButton.contains(event.target)
-    ) {
-      closeFilterPopover();
-    }
-  };
-
-  document.addEventListener("mousedown", filterOutsideHandler, true);
-  document.addEventListener("keydown", handleFilterKeydown);
+  return 'Unbekannte Verzauberung';
 };
 
-const handleFilterKeydown = (event) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    closeFilterPopover();
-    elements.filterButton?.focus();
+const resolveEnchantmentLevel = (enchantment) => {
+  if (!enchantment || typeof enchantment !== 'object') return null;
+  const direct = enchantment.level ?? enchantment.current_level ?? enchantment.lvl;
+  const candidate = Number(direct);
+  if (Number.isFinite(candidate)) return candidate;
+  for (const [key, value] of Object.entries(enchantment)) {
+    const lower = key.toLowerCase();
+    if (!lower.includes('level') || lower.includes('max')) continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
   }
-};
-
-const closeFilterPopover = () => {
-  if (!elements.filterPopover) return;
-  if (!state.isFilterOpen) return;
-  state.isFilterOpen = false;
-  elements.filterButton?.setAttribute("aria-expanded", "false");
-  elements.filterPopover.dataset.open = "false";
-  document.removeEventListener("mousedown", filterOutsideHandler, true);
-  document.removeEventListener("keydown", handleFilterKeydown);
-  filterOutsideHandler = null;
-  setTimeout(() => {
-    if (state.isFilterOpen) return;
-    elements.filterPopover.hidden = true;
-  }, 140);
-};
-
-const openAvatarDropdown = () => {
-  if (!elements.avatarDropdown) return;
-  if (elements.avatarDropdown.dataset.open === "true") return;
-  elements.avatarDropdown.hidden = false;
-  requestAnimationFrame(() => {
-    elements.avatarDropdown.dataset.open = "true";
-  });
-  elements.avatarButton?.setAttribute("aria-expanded", "true");
-
-  dropdownOutsideHandler = (event) => {
-    if (
-      !elements.avatarDropdown.contains(event.target) &&
-      !elements.avatarButton.contains(event.target)
-    ) {
-      closeAvatarDropdown();
-    }
-  };
-
-  document.addEventListener("mousedown", dropdownOutsideHandler, true);
-  document.addEventListener("keydown", handleDropdownKeydown);
-};
-
-const closeAvatarDropdown = () => {
-  if (!elements.avatarDropdown) return;
-  elements.avatarDropdown.dataset.open = "false";
-  elements.avatarButton?.setAttribute("aria-expanded", "false");
-  document.removeEventListener("mousedown", dropdownOutsideHandler, true);
-  document.removeEventListener("keydown", handleDropdownKeydown);
-  dropdownOutsideHandler = null;
-  setTimeout(() => {
-    if (elements.avatarDropdown.dataset.open === "true") return;
-    elements.avatarDropdown.hidden = true;
-  }, 140);
-};
-
-const handleDropdownKeydown = (event) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    closeAvatarDropdown();
-    elements.avatarButton?.focus();
+  if (enchantment?.pivot && typeof enchantment.pivot === 'object') {
+    const pivotLevel = Number(enchantment.pivot.level ?? enchantment.pivot.current_level);
+    if (Number.isFinite(pivotLevel)) return pivotLevel;
   }
+  return null;
 };
 
-const openProfilePanel = () => {
-  if (!elements.profilePanel) return;
-  if (state.isProfileOpen) return;
-  state.isProfileOpen = true;
-  elements.profilePanel.hidden = false;
-  requestAnimationFrame(() => {
-    elements.profilePanel.dataset.open = "true";
-    elements.profilePanel.querySelector("button")?.focus();
-  });
+const populateProperties = (item) => {
+  const container = elements.detailProperties;
+  const section = elements.detailPropertiesSection;
+  if (!container || !section) return;
+  container.innerHTML = '';
 
-  profileOutsideHandler = (event) => {
-    if (
-      !elements.profilePanel.contains(event.target) &&
-      !elements.avatarDropdown.contains(event.target)
-    ) {
-      closeProfilePanel();
-    }
-  };
+  const entries = Object.entries(item ?? {})
+    .filter(([key, value]) => {
+      if (value === null || value === undefined || value === '') return false;
+      const normalized = key.toLowerCase();
+      if (
+        [
+          'image_url',
+          'enchantments',
+          'item_enchantments',
+          'price',
+          'description',
+          'released_at',
+          'release_date',
+          'name'
+        ].includes(normalized)
+      )
+        return false;
+      if (typeof value === 'object' && !Array.isArray(value)) return false;
+      return true;
+    });
 
-  profileKeyHandler = (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeProfilePanel();
-      elements.avatarButton?.focus();
-    }
-  };
-
-  document.addEventListener("mousedown", profileOutsideHandler, true);
-  document.addEventListener("keydown", profileKeyHandler);
-};
-
-const closeProfilePanel = () => {
-  if (!elements.profilePanel || !state.isProfileOpen) return;
-  state.isProfileOpen = false;
-  elements.profilePanel.dataset.open = "false";
-  document.removeEventListener("mousedown", profileOutsideHandler, true);
-  document.removeEventListener("keydown", profileKeyHandler);
-  profileOutsideHandler = null;
-  profileKeyHandler = null;
-  setTimeout(() => {
-    if (state.isProfileOpen) return;
-    elements.profilePanel.hidden = true;
-  }, 140);
-};
-
-const openItemModal = async () => {
-  if (!state.user) {
-    openAvatarDropdown();
-    toast("Bitte per Discord anmelden", { duration: 5000 });
+  if (!entries.length) {
+    const empty = document.createElement('p');
+    empty.className = 'detail-status';
+    empty.textContent = 'Keine zusätzlichen Eigenschaften.';
+    container.appendChild(empty);
+    section.hidden = false;
     return;
   }
 
-  if (!supabaseClient) {
-    toast("Supabase Konfiguration fehlt", { duration: 5000 });
+  entries.forEach(([key, value]) => {
+    const row = document.createElement('div');
+    row.className = 'detail-list__row';
+    const dt = document.createElement('dt');
+    dt.textContent = formatFieldLabel(key);
+    const dd = document.createElement('dd');
+    dd.textContent = formatValue(value);
+    row.append(dt, dd);
+    container.appendChild(row);
+  });
+  section.hidden = false;
+};
+
+const populateEnchantments = (enchantments) => {
+  const section = elements.detailEnchantmentsSection;
+  const list = elements.detailEnchantments;
+  if (!section || !list) return;
+  list.innerHTML = '';
+
+  if (!Array.isArray(enchantments) || enchantments.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'detail-enchantments__empty';
+    empty.textContent = 'Keine Verzauberungen vorhanden.';
+    list.appendChild(empty);
+    section.hidden = false;
     return;
   }
 
-  await ensureEnchantments();
-  renderEnchantments();
-
-  if (!elements.itemModal) return;
-  if (state.modalOpen) return;
-  state.modalOpen = true;
-  elements.itemModal.hidden = false;
-  requestAnimationFrame(() => {
-    elements.itemModal.dataset.open = "true";
-    trapFocus(elements.itemModal);
-    const firstFocusable = getFocusableElements(elements.itemModal)[0];
-    firstFocusable?.focus();
+  enchantments.forEach((enchantment) => {
+    const item = document.createElement('li');
+    item.className = 'detail-enchantments__item';
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = resolveEnchantmentName(enchantment);
+    const levelSpan = document.createElement('span');
+    levelSpan.className = 'detail-enchantments__level';
+    const level = resolveEnchantmentLevel(enchantment);
+    levelSpan.textContent = level ? `Lvl ${level}` : 'Lvl ?';
+    item.append(nameSpan, levelSpan);
+    list.appendChild(item);
   });
+  section.hidden = false;
 };
 
-const closeItemModal = () => {
-  if (!elements.itemModal || !state.modalOpen) return;
-  state.modalOpen = false;
-  elements.itemModal.dataset.open = "false";
-  releaseFocus();
-  elements.itemForm?.reset();
-  setTimeout(() => {
-    if (state.modalOpen) return;
-    elements.itemModal.hidden = true;
-  }, 140);
+const setDetailStatus = (message) => {
+  const status = elements.detailStatus;
+  if (!status) return;
+  status.textContent = message ?? '';
+};
+
+const setDetailMedia = (url, name) => {
+  const figure = elements.detailMedia;
+  const image = elements.detailImage;
+  const fallback = elements.detailFallback;
+  if (!figure || !image || !fallback) return;
+
+  const cleaned = typeof url === 'string' ? url.trim() : '';
+  if (cleaned) {
+    image.src = cleaned;
+    image.alt = name ? `Bild von ${name}` : 'Item Bild';
+    fallback.textContent = '';
+    delete figure.dataset.empty;
+  } else {
+    image.removeAttribute('src');
+    image.alt = '';
+    fallback.textContent = getInitial(name);
+    figure.dataset.empty = 'true';
+  }
+};
+
+const populateDetail = (item) => {
+  elements.detailTitle.textContent = item?.name ?? 'Unbekanntes Item';
+
+  const subtitleParts = [];
+  if (item?.rarity) subtitleParts.push(formatLabel(item.rarity));
+  if (item?.type) subtitleParts.push(formatLabel(item.type));
+  elements.detailSubtitle.textContent = subtitleParts.length ? subtitleParts.join(' • ') : 'Itemdetails';
+
+  elements.detailType.textContent = formatLabel(item?.type);
+  elements.detailRarity.textContent = formatLabel(item?.rarity);
+
+  const releaseSource = item?.released_at ?? item?.release_date;
+  const releaseRelative = formatRelativeDate(releaseSource);
+  const releaseAbsolute = formatAbsoluteDate(releaseSource);
+  elements.detailReleaseRelative.textContent = releaseRelative ?? 'Unbekannt';
+  elements.detailReleaseAbsolute.textContent = releaseAbsolute ? `(${releaseAbsolute})` : '';
+
+  renderStars(elements.detailStars, getStarLevel(item));
+  setDetailMedia(item?.image_url, item?.name);
+
+  if (item?.description) {
+    elements.detailDescription.textContent = item.description;
+    elements.detailDescriptionSection.hidden = false;
+  } else {
+    elements.detailDescription.textContent = '';
+    elements.detailDescriptionSection.hidden = true;
+  }
+
+  populateProperties(item);
+  populateEnchantments(item?.enchantments);
+  setDetailStatus('');
 };
 
 const getFocusableElements = (container) => {
-  return qsa(FOCUSABLE_SELECTOR, container).filter((el) => {
-    if (el.hasAttribute("disabled")) return false;
-    if (el.getAttribute("aria-hidden") === "true") return false;
-    const style = window.getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden") return false;
-    if (el.offsetParent === null && style.position !== "fixed") return false;
-    return true;
-  });
+  if (!container) return [];
+  return Array.from(
+    container.querySelectorAll(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  );
 };
 
-let focusTrap = null;
+const openDetail = (id) => {
+  if (!id) return;
+  const view = elements.detailView;
+  if (!view) return;
 
-const trapFocus = (container) => {
-  releaseFocus();
-  const focusable = getFocusableElements(container);
-  const previouslyFocused = document.activeElement;
-  focusTrap = {
-    container,
-    focusable,
-    previouslyFocused
-  };
+  state.detailToken += 1;
+  const token = state.detailToken;
+  state.activeDetailId = id;
+  state.lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
-  modalKeyHandler = (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeItemModal();
-      return;
-    }
-
-    if (event.key === "Tab" && focusTrap?.focusable.length) {
-      const { focusable } = focusTrap;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-  };
-
-  document.addEventListener("keydown", modalKeyHandler);
-};
-
-const releaseFocus = () => {
-  if (!focusTrap) return;
-  document.removeEventListener("keydown", modalKeyHandler);
-  focusTrap.previouslyFocused?.focus?.();
-  focusTrap = null;
-  modalKeyHandler = null;
-};
-
-const ensureEnchantments = async () => {
-  if (!elements.enchantmentHint) return;
-  if (!supabaseClient) {
-    elements.enchantmentHint.textContent = "Keine Verbindung zur Datenbank";
-    state.enchantments = [];
-    return;
+  view.hidden = false;
+  view.setAttribute('aria-hidden', 'false');
+  document.body.dataset.detailOpen = 'true';
+  setDetailStatus('Lade Details…');
+  elements.detailProperties.innerHTML = '';
+  elements.detailEnchantments.innerHTML = '';
+  if (elements.detailPropertiesSection) {
+    elements.detailPropertiesSection.hidden = true;
+  }
+  if (elements.detailEnchantmentsSection) {
+    elements.detailEnchantmentsSection.hidden = true;
+  }
+  if (elements.detailDescriptionSection) {
+    elements.detailDescriptionSection.hidden = true;
+    elements.detailDescription.textContent = '';
   }
 
-  if (state.enchantments.length) {
-    elements.enchantmentHint.textContent =
-      "Wähle Verzauberungen aus und gib ein Level an.";
-    return;
+  const focusable = getFocusableElements(view);
+  const firstFocusable = focusable[0];
+  if (firstFocusable) {
+    firstFocusable.focus({ preventScroll: true });
   }
 
-  elements.enchantmentHint.textContent = "Lade Verzauberungen…";
+  fetchDetail(id, token);
+};
 
+const fetchDetail = async (id, token) => {
   try {
-    const { data, error } = await supabaseClient
-      .from("enchantments")
-      .select("id, name, max_level")
-      .order("name", { ascending: true });
-    if (error) throw error;
-    state.enchantments = data ?? [];
-    elements.enchantmentHint.textContent = state.enchantments.length
-      ? "Wähle Verzauberungen aus und gib ein Level an."
-      : "Keine Verzauberungen vorhanden.";
-  } catch (error) {
-    console.error(error);
-    toast("Verzauberungen konnten nicht geladen werden", { duration: 5000 });
-    elements.enchantmentHint.textContent = "Fehler beim Laden";
-  }
-};
-
-const renderEnchantments = () => {
-  if (!elements.enchantmentsList) return;
-  elements.enchantmentsList.innerHTML = "";
-  if (!state.enchantments.length) return;
-
-  state.enchantments.forEach((ench) => {
-    const option = document.createElement("div");
-    option.className = "enchantment-option";
-    const checkboxId = `enchantment-${ench.id}`;
-    option.innerHTML = `
-      <label for="${checkboxId}">
-        <input type="checkbox" id="${checkboxId}" name="enchantments" value="${ench.id}" />
-        <span>${ench.name}</span>
-        <span class="enchantment-option__max">max ${ench.max_level ?? 1}</span>
-      </label>
-      <div class="enchantment-option__level" data-level-container hidden>
-        <label>
-          Level
-          <input type="number" name="enchantment-level-${ench.id}" min="1" max="${ench.max_level ?? 1}" value="1" />
-        </label>
-      </div>
-    `;
-
-    const checkbox = option.querySelector("input[type='checkbox']");
-    const levelContainer = option.querySelector("[data-level-container]");
-    const levelInput = option.querySelector("input[type='number']");
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) {
-        option.classList.add("is-active");
-        levelContainer.hidden = false;
-        levelInput.focus();
-      } else {
-        option.classList.remove("is-active");
-        levelContainer.hidden = true;
-      }
-    });
-
-    elements.enchantmentsList.appendChild(option);
-  });
-  resetEnchantmentLevels();
-};
-
-function resetEnchantmentLevels() {
-  if (!elements.enchantmentsList) return;
-  qsa(".enchantment-option", elements.enchantmentsList).forEach((option) => {
-    option.classList.remove("is-active");
-    const levelContainer = option.querySelector("[data-level-container]");
-    if (levelContainer) {
-      levelContainer.hidden = true;
-    }
-  });
-}
-
-const performSearch = async () => {
-  const token = ++currentSearchToken;
-  state.searchLoading = true;
-  setResultInfo();
-
-  const query = state.searchQuery.trim();
-  if (!query && !state.filters.item_type && !state.filters.rarity) {
-    if (token === currentSearchToken) {
-      state.searchLoading = false;
-      state.resultsCount = null;
-      setResultInfo();
-    }
-    return;
-  }
-
-  try {
-    const count = await executeSearch({ query, filters: state.filters });
-    if (token === currentSearchToken) {
-      state.resultsCount = typeof count === "number" ? count : null;
-    }
-  } catch (error) {
-    console.error(error);
-    if (token === currentSearchToken) {
-      toast("Suche fehlgeschlagen", { duration: 5000 });
-      state.resultsCount = null;
-    }
-  } finally {
-    if (token === currentSearchToken) {
-      state.searchLoading = false;
-      setResultInfo();
-    }
-  }
-};
-
-const executeSearch = async ({ query, filters }) => {
-  const params = new URLSearchParams();
-  if (query) params.set("q", query);
-  if (filters.item_type) params.set("type", filters.item_type);
-  if (filters.rarity) params.set("rarity", filters.rarity);
-
-  if (env.API_BASE) {
-    const base = env.API_BASE.replace(/\/$/, "");
-    const url = `${base}/search?${params.toString()}`;
-    const response = await fetch(url, {
-      headers: { Accept: "application/json" },
-      credentials: "include"
-    });
+    const response = await fetch(`/api/items/${encodeURIComponent(id)}`);
     if (!response.ok) {
-      throw new Error("API-Antwort fehlgeschlagen");
+      throw new Error(`HTTP ${response.status}`);
     }
     const payload = await response.json();
-    if (typeof payload.count === "number") return payload.count;
-    if (Array.isArray(payload.results)) return payload.results.length;
-    return null;
-  }
+    if (token !== state.detailToken) return;
 
-  if (!supabaseClient) {
-    if (!state.missingBackendNotified) {
-      toast("Keine API oder Supabase konfiguriert", { duration: 5000 });
-      state.missingBackendNotified = true;
+    const item = payload?.item ?? payload?.data?.item ?? null;
+    if (!item) {
+      throw new Error('Ungültige Antwort');
     }
-    return null;
-  }
-
-  let builder = supabaseClient.from("items").select("id", { count: "exact", head: true });
-  if (query) {
-    builder = builder.ilike("name", `%${query}%`);
-  }
-  if (filters.item_type) {
-    builder = builder.eq("item_type", filters.item_type);
-  }
-  if (filters.rarity) {
-    builder = builder.eq("rarity", filters.rarity);
-  }
-
-  const { count, error } = await builder;
-  if (error) throw error;
-  return count ?? 0;
-};
-
-const handleAvatarAction = async (action) => {
-  switch (action) {
-    case "login":
-      if (!supabaseClient) {
-        toast("Supabase Konfiguration fehlt", { duration: 5000 });
-        return;
-      }
-      try {
-        const redirectTo = `${window.location.origin}${window.location.pathname}`;
-        await supabaseClient.auth.signInWithOAuth({
-          provider: "discord",
-          options: { redirectTo }
-        });
-      } catch (error) {
-        console.error(error);
-        toast("Anmeldung fehlgeschlagen", { duration: 5000 });
-      }
-      break;
-    case "profile":
-      updateProfilePanel();
-      openProfilePanel();
-      break;
-    case "logout":
-      if (!supabaseClient) {
-        toast("Supabase Konfiguration fehlt", { duration: 5000 });
-        return;
-      }
-      try {
-        await supabaseClient.auth.signOut();
-        toast("Erfolgreich abgemeldet", { duration: 4000 });
-      } catch (error) {
-        console.error(error);
-        toast("Abmelden fehlgeschlagen", { duration: 5000 });
-      }
-      break;
-    default:
-      break;
-  }
-};
-
-const updateProfilePanel = () => {
-  if (!state.user || !elements.profileEmail || !elements.profileId) return;
-  elements.profileEmail.textContent = state.user.email ?? "-";
-  elements.profileId.textContent = state.user.id ?? "-";
-};
-
-const handleItemSubmit = async (event) => {
-  event.preventDefault();
-  if (!supabaseClient) {
-    toast("Supabase Konfiguration fehlt", { duration: 5000 });
-    return;
-  }
-  if (!state.user) {
-    toast("Bitte per Discord anmelden", { duration: 5000 });
-    openAvatarDropdown();
-    return;
-  }
-
-  const formData = new FormData(elements.itemForm);
-  const name = (formData.get("name") || "").toString().trim();
-  const itemType = formData.get("item_type");
-  const rarity = formData.get("rarity");
-  const starLevelValue = formData.get("star_level");
-  const priceValue = formData.get("price");
-  const imageUrl = (formData.get("image_url") || "").toString().trim();
-
-  if (!name) {
-    toast("Name ist erforderlich", { duration: 4000 });
-    return;
-  }
-
-  if (!itemType) {
-    toast("Item-Art auswählen", { duration: 4000 });
-    return;
-  }
-
-  if (!rarity) {
-    toast("Seltenheit auswählen", { duration: 4000 });
-    return;
-  }
-
-  const starLevel = Number.parseInt(starLevelValue, 10) || 0;
-  if (starLevel < 0) {
-    toast("Stern-Level muss ≥ 0 sein", { duration: 4000 });
-    return;
-  }
-
-  const price = priceValue ? Number.parseFloat(priceValue) : null;
-  if (price !== null && price < 0) {
-    toast("Preis muss ≥ 0 sein", { duration: 4000 });
-    return;
-  }
-
-  const selectedEnchantments = formData.getAll("enchantments");
-  const enchantmentPayload = [];
-
-  for (const enchantmentId of selectedEnchantments) {
-    const def = state.enchantments.find((ench) => String(ench.id) === String(enchantmentId));
-    const levelRaw = formData.get(`enchantment-level-${enchantmentId}`);
-    const level = Number.parseInt(levelRaw, 10);
-    if (!def) continue;
-    const maxLevel = def.max_level ?? 1;
-    if (!level || level < 1 || level > maxLevel) {
-      toast(`Level für ${def.name} muss zwischen 1 und ${maxLevel} liegen`, { duration: 5000 });
-      return;
+    populateDetail(item);
+  } catch (error) {
+    if (token === state.detailToken) {
+      console.error(error);
+      setDetailStatus('Details konnten nicht geladen werden.');
     }
-    enchantmentPayload.push({
-      enchantment_id: def.id,
-      level
+  }
+};
+
+const closeDetail = () => {
+  const view = elements.detailView;
+  if (!view || view.getAttribute('aria-hidden') === 'true') return;
+  state.detailToken += 1;
+  state.activeDetailId = null;
+  view.setAttribute('aria-hidden', 'true');
+  view.hidden = true;
+  delete document.body.dataset.detailOpen;
+  setDetailStatus('');
+  if (state.lastFocusedElement && typeof state.lastFocusedElement.focus === 'function') {
+    state.lastFocusedElement.focus({ preventScroll: true });
+  }
+};
+
+const handleDetailKeydown = (event) => {
+  const view = elements.detailView;
+  if (!view || view.getAttribute('aria-hidden') === 'true') return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeDetail();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const focusable = getFocusableElements(view);
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+};
+
+const initializeEvents = () => {
+  if (elements.searchForm) {
+    elements.searchForm.addEventListener('submit', (event) => {
+      event.preventDefault();
     });
   }
 
-  elements.modalSubmit.disabled = true;
-  const originalText = elements.modalSubmit.textContent;
-  elements.modalSubmit.textContent = "Speichern…";
+  const debouncedSearch = debounce(() => {
+    state.mode = 'search';
+    triggerSearch(true);
+  }, 350);
 
-  try {
-    const { data, error } = await supabaseClient
-      .from("items")
-      .insert([
-        {
-          name,
-          item_type: itemType,
-          rarity,
-          star_level: starLevel,
-          price,
-          image_url: imageUrl || null,
-          creator: state.user.id
+  if (elements.searchInput) {
+    elements.searchInput.addEventListener('input', (event) => {
+      const value = event.target.value;
+      state.searchQuery = value;
+      if (value.trim()) {
+        state.mode = 'search';
+        debouncedSearch();
+      } else {
+        debouncedSearch.cancel();
+        state.mode = 'list';
+        state.lastSearchToken += 1;
+        state.searchResults = [];
+        state.searchHasMore = false;
+        state.searchPage = 0;
+        state.error = '';
+        render();
+        if (state.items.length === 0 && !state.loading) {
+          loadItems({ reset: true });
         }
-      ])
-      .select("id")
-      .single();
-    if (error) throw error;
-
-    if (enchantmentPayload.length) {
-      const rows = enchantmentPayload.map((row) => ({
-        item_id: data.id,
-        enchantment_id: row.enchantment_id,
-        level: row.level
-      }));
-      const { error: linkError } = await supabaseClient
-        .from("item_enchantments")
-        .insert(rows);
-      if (linkError) throw linkError;
-    }
-
-    toast("Item gespeichert", { duration: 4000 });
-    closeItemModal();
-    elements.itemForm.reset();
-    performSearch();
-  } catch (error) {
-    console.error(error);
-    toast(error.message || "Speichern fehlgeschlagen", { duration: 5000 });
-  } finally {
-    elements.modalSubmit.disabled = false;
-    elements.modalSubmit.textContent = originalText;
-  }
-};
-
-const renderAvatar = () => {
-  if (!elements.avatarButton) return;
-  const inner = elements.avatarButton.querySelector(".avatar-button__inner");
-  if (!inner) return;
-  inner.innerHTML = "";
-  inner.classList.remove("avatar-button__inner--image", "avatar-button__inner--initials");
-  elements.avatarButton.classList.remove("avatar-button--image");
-
-  if (!state.user) {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.classList.add("icon");
-    svg.dataset.icon = "user";
-    inner.appendChild(svg);
-    elements.avatarButton.setAttribute("title", "Gastkonto");
-    inlineExternalIcons();
-    return;
-  }
-
-  const metadata = state.user.user_metadata || {};
-  const avatarUrl = metadata.avatar_url || metadata.picture || metadata.avatar;
-  const displayName = metadata.full_name || metadata.name || metadata.preferred_username || state.user.email || "User";
-
-  if (avatarUrl) {
-    const img = document.createElement("img");
-    img.src = avatarUrl;
-    img.alt = "";
-    img.className = "avatar-button__image";
-    inner.appendChild(img);
-    inner.classList.add("avatar-button__inner--image");
-    elements.avatarButton.classList.add("avatar-button--image");
-  } else {
-    const initials = displayName
-      .split(/\s+/)
-      .map((part) => part[0])
-      .filter(Boolean)
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-    inner.textContent = initials || "U";
-    inner.classList.add("avatar-button__inner--initials");
-  }
-
-  elements.avatarButton.setAttribute("title", displayName);
-};
-
-const escapeHTML = (value) => {
-  const div = document.createElement("div");
-  div.textContent = value;
-  return div.innerHTML;
-};
-
-const renderAvatarDropdown = () => {
-  if (!elements.dropdownContent) return;
-  let html = "";
-
-  if (!state.user) {
-    html = `
-      <button class="dropdown__item" type="button" data-action="login" role="menuitem">
-        Mit Discord anmelden
-      </button>
-    `;
-  } else {
-    const metadata = state.user.user_metadata || {};
-    const displayName = metadata.full_name || metadata.name || metadata.preferred_username || state.user.email || "Nutzer";
-    const email = state.user.email ? `<span class="dropdown__user-meta">${escapeHTML(state.user.email)}</span>` : "";
-    html = `
-      <div class="dropdown__user" role="presentation">
-        <span class="dropdown__user-name">${escapeHTML(displayName)}</span>
-        ${email}
-      </div>
-      <div class="dropdown__separator" role="none"></div>
-      <button class="dropdown__item" type="button" data-action="profile" role="menuitem">Profil</button>
-      <button class="dropdown__item" type="button" data-action="logout" role="menuitem">Abmelden</button>
-    `;
-  }
-
-  elements.dropdownContent.innerHTML = html;
-};
-
-const attachEventListeners = () => {
-  elements.sidebarToggle?.addEventListener("click", toggleSidebar);
-
-  elements.avatarButton?.addEventListener("click", () => {
-    if (elements.avatarDropdown.dataset.open === "true") {
-      closeAvatarDropdown();
-    } else {
-      renderAvatarDropdown();
-      openAvatarDropdown();
-    }
-  });
-
-  elements.avatarDropdown?.addEventListener("click", (event) => {
-    const target = event.target.closest("[data-action]");
-    if (!target) return;
-    const action = target.dataset.action;
-    handleAvatarAction(action);
-    closeAvatarDropdown();
-  });
-
-  elements.searchInput?.addEventListener("input", (event) => {
-    state.searchQuery = event.target.value;
-    debouncedSearch();
-  });
-
-  elements.searchForm?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    state.searchQuery = elements.searchInput?.value || "";
-    performSearch();
-  });
-
-  elements.filterButton?.addEventListener("click", () => {
-    if (state.isFilterOpen) {
-      closeFilterPopover();
-    } else {
-      openFilterPopover();
-    }
-  });
-
-  elements.filterForm?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const formData = new FormData(elements.filterForm);
-    state.filters.item_type = formData.get("item_type") || "";
-    state.filters.rarity = formData.get("rarity") || "";
-    updateFilterButtonState();
-    closeFilterPopover();
-    performSearch();
-  });
-
-  elements.resetFilters?.addEventListener("click", () => {
-    if (!elements.filterForm) return;
-    elements.filterForm.reset();
-    state.filters.item_type = "";
-    state.filters.rarity = "";
-    updateFilterButtonState();
-    performSearch();
-  });
-
-  elements.filterClose?.addEventListener("click", () => {
-    closeFilterPopover();
-    elements.filterButton?.focus();
-  });
-
-  elements.addItemButton?.addEventListener("click", () => {
-    openItemModal();
-  });
-
-  elements.modalCloseTriggers.forEach((trigger) => {
-    trigger.addEventListener("click", () => {
-      closeItemModal();
+      }
+      updateStatusMessage();
     });
-  });
-
-  elements.itemForm?.addEventListener("submit", handleItemSubmit);
-  elements.itemForm?.addEventListener("reset", resetEnchantmentLevels);
-
-  elements.profileClose?.addEventListener("click", () => {
-    closeProfilePanel();
-    elements.avatarButton?.focus();
-  });
-
-  window.addEventListener("resize", () => {
-    if (state.isFilterOpen) {
-      closeFilterPopover();
-    }
-  });
-};
-
-const debouncedSearch = debounce(() => {
-  state.searchQuery = elements.searchInput?.value || "";
-  performSearch();
-}, 300);
-
-const initAuth = async () => {
-  if (!supabaseClient) {
-    renderAvatar();
-    renderAvatarDropdown();
-    return;
   }
 
-  try {
-    const {
-      data: { session }
-    } = await supabaseClient.auth.getSession();
-    state.user = session?.user ?? null;
-    renderAvatar();
-    renderAvatarDropdown();
-  } catch (error) {
-    console.error(error);
-    toast("Konnte Auth-Status nicht laden", { duration: 5000 });
+  if (elements.typeFilter) {
+    elements.typeFilter.addEventListener('change', (event) => {
+      state.filters.type = event.target.value || '';
+      render();
+    });
   }
 
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
-    state.user = session?.user ?? null;
-    renderAvatar();
-    renderAvatarDropdown();
-    if (!state.user) {
-      closeProfilePanel();
-    }
-  });
+  if (elements.rarityFilter) {
+    elements.rarityFilter.addEventListener('change', (event) => {
+      state.filters.rarity = event.target.value || '';
+      render();
+    });
+  }
+
+  if (elements.loadMoreButton) {
+    elements.loadMoreButton.addEventListener('click', () => {
+      if (state.loading) return;
+      if (state.mode === 'search') {
+        triggerSearch(false);
+      } else {
+        loadItems({ reset: false });
+      }
+    });
+  }
+
+  const view = elements.detailView;
+  if (view) {
+    view.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.matches('[data-close-detail]') || target.closest('[data-close-detail]')) {
+        closeDetail();
+      }
+    });
+    view.addEventListener('keydown', handleDetailKeydown);
+  }
 };
 
-const init = () => {
-  inlineExternalIcons();
-  initSidebarState();
-  updateFilterButtonState();
-  setResultInfo();
-  attachEventListeners();
-  initAuth();
-};
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
-}
+initializeEvents();
+render();
+loadItems({ reset: true });
