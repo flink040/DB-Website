@@ -6,6 +6,7 @@ import {
   withCache,
   type CacheEnv,
 } from '../../lib/cache';
+import { parseLimit } from '../../lib/request-params';
 
 interface Item {
   id: string;
@@ -20,13 +21,6 @@ type Env = SupabaseEnv & CacheEnv;
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-
-const parseLimit = (value: string | null): number => {
-  if (!value) return DEFAULT_LIMIT;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_LIMIT;
-  return Math.min(Math.floor(parsed), MAX_LIMIT);
-};
 
 interface Cursor {
   releasedAt?: string;
@@ -90,7 +84,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
   return withCache(request, env, async () => {
     const url = new URL(request.url);
-    const limit = parseLimit(url.searchParams.get('limit'));
+    const limit = parseLimit(
+      url.searchParams.get('limit'),
+      DEFAULT_LIMIT,
+      MAX_LIMIT
+    );
     const cursor = parseCursor(url.searchParams.get('cursor'));
 
     const supabase = getSupabaseClient(env);
