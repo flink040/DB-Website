@@ -57,6 +57,13 @@ export const initializeEvents = () => {
     });
   }
 
+  if (elements.starsFilter) {
+    elements.starsFilter.addEventListener('change', (event) => {
+      state.filters.stars = event.target.value ?? '';
+      render();
+    });
+  }
+
   if (elements.loadMoreButton) {
     elements.loadMoreButton.addEventListener('click', () => {
       if (state.loading) return;
@@ -71,6 +78,25 @@ export const initializeEvents = () => {
   if (elements.addItemButton) {
     elements.addItemButton.addEventListener('click', () => {
       openAddItemModal();
+    });
+  }
+
+  if (elements.recentSearchList) {
+    elements.recentSearchList.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const trigger = target.closest('[data-recent-search]');
+      if (!(trigger instanceof HTMLElement)) return;
+      const value = trigger.getAttribute('data-recent-search') ?? '';
+      const query = value.trim();
+      if (!query) return;
+      state.searchQuery = query;
+      if (elements.searchInput) {
+        elements.searchInput.value = query;
+        elements.searchInput.focus();
+      }
+      state.mode = 'search';
+      triggerSearch(true);
     });
   }
 

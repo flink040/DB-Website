@@ -1,6 +1,6 @@
 import { PAGE_SIZE } from './constants.js';
 import { render, setLoading } from './render.js';
-import { state } from './state.js';
+import { state, addRecentSearch } from './state.js';
 
 const createResponseError = async (response) => {
   let serverMessage = '';
@@ -137,6 +137,9 @@ export const searchItems = async ({ page, reset }) => {
 export const triggerSearch = (reset) => {
   const query = state.searchQuery.trim();
   if (!query) return;
+  if (reset) {
+    addRecentSearch(query);
+  }
   const nextPage = reset ? 1 : state.searchPage + 1;
   searchItems({ page: nextPage, reset });
 };
