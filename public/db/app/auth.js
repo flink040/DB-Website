@@ -127,13 +127,61 @@ const applyAuthState = (updates) => {
 
 export const initializeAuth = async () => {
   applyAuthState({ status: 'loading', error: '', session: null, profile: null });
+  let pendingAuthError = '';
+  let codeFromQuery = '';
   try {
+    if (typeof window !== 'undefined' && window?.location) {
+      const url = new URL(window.location.href);
+      const params = url.searchParams;
+      const paramsToDelete = [];
+      const rawErrorDescription = params.get('error_description');
+      const rawError = params.get('error');
+      const trimmedErrorDescription =
+        typeof rawErrorDescription === 'string' ? rawErrorDescription.trim() : '';
+      const trimmedError = typeof rawError === 'string' ? rawError.trim() : '';
+      if (trimmedErrorDescription) {
+        pendingAuthError = trimmedErrorDescription;
+      } else if (trimmedError) {
+        pendingAuthError = trimmedError;
+      }
+      if (rawErrorDescription !== null) {
+        paramsToDelete.push('error_description');
+      }
+      if (rawError !== null) {
+        paramsToDelete.push('error');
+      }
+      const rawCode = params.get('code');
+      if (typeof rawCode === 'string' && rawCode.trim()) {
+        codeFromQuery = rawCode.trim();
+        paramsToDelete.push('code');
+      }
+      if (pendingAuthError) {
+        applyAuthState({ error: pendingAuthError });
+      }
+      if (paramsToDelete.length && typeof window.history?.replaceState === 'function') {
+        paramsToDelete.forEach((name) => params.delete(name));
+        const newSearch = params.toString();
+        const newUrl = `${url.pathname}${newSearch ? `?${newSearch}` : ''}${url.hash}`;
+        window.history.replaceState(window.history.state, document.title, newUrl);
+      }
+    }
     const client = await getClient();
+    let session = null;
+    if (codeFromQuery && !state.auth?.session) {
+      const { data: exchangeData, error: exchangeError } =
+        await client.auth.exchangeCodeForSession(codeFromQuery);
+      if (exchangeError) {
+        throw exchangeError;
+      }
+      session = exchangeData?.session ?? null;
+    }
     const { data: sessionData, error: sessionError } = await client.auth.getSession();
     if (sessionError) {
       throw sessionError;
     }
-    const session = sessionData?.session ?? null;
+    if (sessionData?.session) {
+      session = sessionData.session;
+    }
     let profile = null;
     if (session?.user) {
       profile = mapUserToProfile(session.user);
@@ -146,10 +194,18 @@ export const initializeAuth = async () => {
       }
       profile = mapUserToProfile(userData?.user ?? null);
     }
-    applyAuthState({ status: 'ready', profile, session, error: '' });
+    const hasSessionOrProfile = Boolean(session) || Boolean(profile);
+    const nextErrorMessage = hasSessionOrProfile ? '' : pendingAuthError;
+    applyAuthState({ status: 'ready', profile, session, error: nextErrorMessage });
     client.auth.onAuthStateChange((_event, nextSession) => {
       const nextProfile = mapUserToProfile(nextSession?.user ?? null);
-      applyAuthState({ status: 'ready', profile: nextProfile, session: nextSession ?? null, error: '' });
+      const nextError = nextSession ? '' : state.auth?.error ?? '';
+      applyAuthState({
+        status: 'ready',
+        profile: nextProfile,
+        session: nextSession ?? null,
+        error: nextError,
+      });
     });
   } catch (error) {
     const message =
