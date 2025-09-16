@@ -7,11 +7,20 @@ const supabaseStub: any = supabase;
 
 let envCounter = 0;
 
-const createEnv = () => {
+interface TestEnv {
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
+  ITEMS_API_TOKEN: string;
+  [key: string]: unknown;
+}
+
+const createEnv = (overrides: Partial<TestEnv> = {}) => {
   envCounter += 1;
-  const env = {
+  const env: TestEnv = {
     SUPABASE_URL: `https://stub-${envCounter}.supabase.co`,
     SUPABASE_ANON_KEY: `anon-key-${envCounter}`,
+    ITEMS_API_TOKEN: `token-${envCounter}`,
+    ...overrides,
   };
   const cacheKey = `${env.SUPABASE_URL}:${env.SUPABASE_ANON_KEY}`;
   supabaseStub.__resetSupabaseState(cacheKey);
@@ -27,7 +36,10 @@ test('items API returns CORS headers for OPTIONS requests', async () => {
   const response = await onRequest({ request, env } as any);
 
   assert.equal(response.status, 204);
-  assert.equal(response.headers.get('Access-Control-Allow-Methods'), 'GET, OPTIONS');
+  assert.equal(
+    response.headers.get('Access-Control-Allow-Methods'),
+    'GET, POST, OPTIONS'
+  );
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
 });
 
@@ -152,4 +164,104 @@ test('items API returns items and a next cursor from Supabase results', async ()
     ['item-3', 'item-2']
   );
   assert.equal(body.nextCursor, '2023-03-08T00:00:00.000Z|item-1');
+});
+
+test('items API rejects POST requests without a valid bearer token', async () => {
+  const { env } = createEnv();
+
+  const request = createRequest('/api/items', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: 'Unauthorized Item',
+      type: 'weapon',
+      rarity: 'rare',
+      released_at: '2024-01-01T00:00:00Z',
+    }),
+  });
+
+  const response = await onRequest({ request, env } as any);
+  const body = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(body.error, 'Unauthorized');
+});
+
+test('items API validates POST request payloads', async () => {
+  const { env } = createEnv();
+
+  const request = createRequest('/api/items', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.ITEMS_API_TOKEN}`,
+    },
+    body: JSON.stringify({
+      name: '  ',
+      type: 'weapon',
+      rarity: 'rare',
+    }),
+  });
+
+  const response = await onRequest({ request, env } as any);
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.match(body.error, /Invalid request body/);
+});
+
+test('items API inserts new items via POST requests', async () => {
+  const { env, cacheKey } = createEnv();
+
+  const insertedItem = {
+    id: 'item-123',
+    name: 'Test Item',
+    type: 'weapon',
+    rarity: 'rare',
+    released_at: '2024-01-01T00:00:00.000Z',
+  };
+
+  supabaseStub.__queueResponse(cacheKey, { data: insertedItem });
+
+  const request = createRequest('/api/items', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.ITEMS_API_TOKEN}`,
+    },
+    body: JSON.stringify({
+      name: '  Test Item  ',
+      type: 'weapon',
+      rarity: 'rare',
+      released_at: '2024-01-01T00:00:00Z',
+    }),
+  });
+
+  const response = await onRequest({ request, env } as any);
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  assert.deepEqual(body.item, insertedItem);
+
+  const lastQuery = supabaseStub.__getLastQuery(cacheKey);
+  if (!lastQuery) {
+    throw new Error('Expected Supabase query to be recorded');
+  }
+
+  const insertStep = lastQuery.steps.find((step: any) => step[0] === 'insert');
+  assert.ok(insertStep, 'Expected insert step to be recorded');
+  assert.deepEqual(insertStep[1], [
+    {
+      name: 'Test Item',
+      type: 'weapon',
+      rarity: 'rare',
+      released_at: '2024-01-01T00:00:00.000Z',
+    },
+  ]);
+
+  const maybeSingleStep = lastQuery.steps[lastQuery.steps.length - 1];
+  assert.deepEqual(maybeSingleStep, ['maybeSingle']);
 });
