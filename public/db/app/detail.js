@@ -1,4 +1,5 @@
 import { elements } from './elements.js';
+import { MATERIAL_LABELS } from './constants.js';
 import { state } from './state.js';
 import {
   formatAbsoluteDate,
@@ -12,6 +13,46 @@ import {
   resolveEnchantmentLevel,
   resolveEnchantmentName
 } from './utils.js';
+
+const resolveMaterial = (item) => {
+  const rawCandidates = [];
+  const normalizedCandidates = new Set();
+
+  const addCandidate = (value) => {
+    if (value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.forEach(addCandidate);
+      return;
+    }
+    const stringValue = String(value);
+    const trimmed = stringValue.trim();
+    if (!trimmed) return;
+    rawCandidates.push(trimmed);
+    normalizedCandidates.add(trimmed.toLowerCase());
+  };
+
+  addCandidate(item?.material);
+  addCandidate(item?.materials);
+  addCandidate(item?.material_display);
+  addCandidate(item?.materialName);
+  addCandidate(item?.material_type);
+  addCandidate(item?.materialType);
+
+  [item?.material_id, item?.materialId, item?.materialID].forEach(addCandidate);
+
+  for (const candidate of normalizedCandidates) {
+    const label = MATERIAL_LABELS[candidate];
+    if (label) {
+      return label;
+    }
+  }
+
+  if (rawCandidates.length > 0) {
+    return formatLabel(rawCandidates[0]);
+  }
+
+  return 'Unbekannt';
+};
 
 const populateProperties = (item) => {
   const container = elements.detailProperties;
@@ -121,13 +162,17 @@ const setDetailMedia = (url, name) => {
 const populateDetail = (item) => {
   elements.detailTitle.textContent = item?.name ?? 'Unbekanntes Item';
 
+  const materialLabel = resolveMaterial(item);
+
   const subtitleParts = [];
-  if (item?.rarity) subtitleParts.push(formatLabel(item.rarity));
   if (item?.type) subtitleParts.push(formatLabel(item.type));
+  if (materialLabel && materialLabel !== 'Unbekannt') subtitleParts.push(materialLabel);
+  if (item?.rarity) subtitleParts.push(formatLabel(item.rarity));
   elements.detailSubtitle.textContent = subtitleParts.length ? subtitleParts.join(' • ') : 'Itemdetails';
 
   elements.detailType.textContent = formatLabel(item?.type);
   elements.detailRarity.textContent = formatLabel(item?.rarity);
+  elements.detailMaterial.textContent = materialLabel;
 
   const releaseSource = item?.released_at ?? item?.release_date;
   const releaseRelative = formatRelativeDate(releaseSource);

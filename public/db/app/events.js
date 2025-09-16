@@ -48,6 +48,13 @@ export const initializeEvents = () => {
     });
   }
 
+  if (elements.materialFilter) {
+    elements.materialFilter.addEventListener('change', (event) => {
+      state.filters.material = event.target.value || '';
+      render();
+    });
+  }
+
   if (elements.rarityFilter) {
     elements.rarityFilter.addEventListener('change', (event) => {
       state.filters.rarity = event.target.value || '';

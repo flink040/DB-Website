@@ -50,6 +50,21 @@
             </select>
           </label>
           <label class="filter">
+            <span class="filter__label">Material</span>
+            <select id="materialFilter" name="material">
+              <option value="">Alle Materialien</option>
+              <option value="netherite">Netherite</option>
+              <option value="diamond">Diamant</option>
+              <option value="gold">Gold</option>
+              <option value="iron">Eisen</option>
+              <option value="chain">Kette</option>
+              <option value="leather">Leder</option>
+              <option value="golden horse armor">Golden Horse Armor</option>
+              <option value="wood">Holz</option>
+              <option value="stone">Stein</option>
+            </select>
+          </label>
+          <label class="filter">
             <span class="filter__label">Seltenheit</span>
             <select id="rarityFilter" name="rarity">
               <option value="">Alle Seltenheiten</option>
@@ -97,6 +112,10 @@
                   <span id="detailReleaseRelative">-</span>
                   <span id="detailReleaseAbsolute" class="detail-card__muted"></span>
                 </dd>
+              </div>
+              <div>
+                <dt>Material</dt>
+                <dd id="detailMaterial">-</dd>
               </div>
               <div>
                 <dt>Typ</dt>

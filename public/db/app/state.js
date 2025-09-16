@@ -9,6 +9,7 @@ export const state = {
   searchPage: 0,
   filters: {
     type: '',
+    material: '',
     rarity: ''
   },
   loading: false,
