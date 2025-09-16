@@ -59,7 +59,7 @@ test('search API rejects unsupported HTTP methods', async () => {
 });
 
 test('search API returns a helpful error when Supabase configuration is missing', async () => {
-  const request = createRequest('/api/search?q=legendary', { method: 'GET' });
+  const request = createRequest('/api/search?q=jackpot', { method: 'GET' });
   const response = await onRequest({ request, env: {} } as any);
   const body = await response.json();
 
@@ -71,7 +71,7 @@ test('search API falls back to the default limit when the parameter is invalid',
   const { env, cacheKey } = createEnv();
   supabaseStub.__queueResponse(cacheKey, { data: [] });
 
-  const request = createRequest('/api/search?q=legendary&limit=not-a-number');
+  const request = createRequest('/api/search?q=jackpot&limit=not-a-number');
   const response = await onRequest({ request, env } as any);
   const body = await response.json();
 
@@ -100,7 +100,7 @@ test('search API handles Supabase errors gracefully', async () => {
     },
   });
 
-  const request = createRequest('/api/search?q=legendary&type=weapon&rarity=rare');
+  const request = createRequest('/api/search?q=jackpot&type=weapon&rarity=mega-jackpot');
   const response = await onRequest({ request, env } as any);
   const body = await response.json();
 
@@ -117,14 +117,14 @@ test('search API returns search results from Supabase', async () => {
       id: 'item-1',
       name: 'Sword of Testing',
       type: 'weapon',
-      rarity: 'rare',
+      rarity: 'selten',
       released_at: '2023-01-01T00:00:00.000Z',
     },
     {
       id: 'item-2',
       name: 'Axe of Assertions',
       type: 'weapon',
-      rarity: 'legendary',
+      rarity: 'legendaer',
       released_at: '2023-01-02T00:00:00.000Z',
     },
   ];
