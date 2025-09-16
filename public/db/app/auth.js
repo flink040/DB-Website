@@ -88,7 +88,7 @@ const mapUserToProfile = (user) => {
     typeof metadata.avatar_url === 'string' && metadata.avatar_url.trim()
       ? metadata.avatar_url.trim()
       : null;
-  let discordId: string | null = null;
+  let discordId = null;
   const identities = Array.isArray(user.identities) ? user.identities : [];
   for (const identity of identities) {
     if (identity?.provider === 'discord') {
