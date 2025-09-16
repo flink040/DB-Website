@@ -22,6 +22,7 @@ export const state = {
     status: 'idle',
     profile: null,
     error: '',
-    session: null
+    session: null,
+    menuOpen: false
   }
 };

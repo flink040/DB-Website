@@ -17,6 +17,14 @@ interface TestEnv {
   [key: string]: unknown;
 }
 
+interface AuthOverrides {
+  userId?: string;
+  discordId?: string;
+  identityData?: Record<string, unknown> | null;
+  userMetadata?: Record<string, unknown> | null;
+  appMetadata?: Record<string, unknown> | null;
+}
+
 const createEnv = (overrides: Partial<TestEnv> = {}) => {
   envCounter += 1;
   const env: TestEnv = {
@@ -34,12 +42,18 @@ const createEnv = (overrides: Partial<TestEnv> = {}) => {
 const createRequest = (path: string, init?: any) =>
   new Request(`https://example.com${path}`, init);
 
-const queueAuthSuccess = (
-  cacheKey: string,
-  overrides: { userId?: string; discordId?: string } = {}
-) => {
-  const userId = overrides.userId ?? 'user-123';
-  const discordId = overrides.discordId ?? 'discord-456';
+const queueAuthSuccess = (cacheKey: string, overrides: AuthOverrides = {}) => {
+  const { userId = 'user-123', discordId = 'discord-456' } = overrides;
+  const identityData = Object.prototype.hasOwnProperty.call(overrides, 'identityData')
+    ? overrides.identityData ?? null
+    : { id: discordId };
+  const userMetadata = Object.prototype.hasOwnProperty.call(overrides, 'userMetadata')
+    ? overrides.userMetadata ?? null
+    : undefined;
+  const appMetadata = Object.prototype.hasOwnProperty.call(overrides, 'appMetadata')
+    ? overrides.appMetadata ?? null
+    : undefined;
+
   supabaseStub.__queueAuthResponse(cacheKey, {
     data: {
       user: {
@@ -47,9 +61,11 @@ const queueAuthSuccess = (
         identities: [
           {
             provider: 'discord',
-            identity_data: { id: discordId },
+            identity_data: identityData,
           },
         ],
+        user_metadata: userMetadata,
+        app_metadata: appMetadata,
       },
     },
     error: null,
@@ -355,6 +371,121 @@ test('items API inserts new items via POST requests', async () => {
 
   const maybeSingleStep = lastQuery.steps[lastQuery.steps.length - 1];
   assert.deepEqual(maybeSingleStep, ['maybeSingle']);
+});
+
+test('items API extracts Discord IDs from alternative identity fields', async () => {
+  const { env, cacheKey } = createEnv();
+
+  const insertedItem = {
+    id: 'item-identity-fallback',
+    name: 'Identity Fallback',
+    type: 'weapon',
+    rarity: 'jackpot',
+    released_at: '2024-02-01T00:00:00.000Z',
+  };
+
+  queueAuthSuccess(cacheKey, {
+    userId: 'user-identity',
+    identityData: { user_id: '  discord-alt-789  ' },
+  });
+
+  supabaseStub.__queueResponse(cacheKey, { data: insertedItem });
+
+  const accessToken = 'token-identity';
+  const request = createRequest('/api/items', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      name: 'Identity Fallback',
+      type: 'weapon',
+      rarity: 'jackpot',
+      released_at: '2024-02-01T00:00:00Z',
+    }),
+  });
+
+  const response = await onRequest({ request, env } as any);
+  await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(supabaseStub.__getLastAuthToken(cacheKey), accessToken);
+
+  const lastQuery = supabaseStub.__getLastQuery(cacheKey);
+  if (!lastQuery) {
+    throw new Error('Expected Supabase query to be recorded');
+  }
+
+  const insertStep = lastQuery.steps.find((step: any) => step[0] === 'insert');
+  assert.equal(insertStep !== undefined, true, 'Expected insert step to be recorded');
+
+  const insertedPayload =
+    insertStep && Array.isArray(insertStep[1]) ? insertStep[1][0] : null;
+  if (!insertedPayload) {
+    throw new Error('Expected insert payload to be recorded');
+  }
+
+  assert.equal(insertedPayload.created_by_user_id, 'user-identity');
+  assert.equal(insertedPayload.created_by_discord_id, 'discord-alt-789');
+});
+
+test('items API extracts Discord IDs from user metadata when identity data is missing', async () => {
+  const { env, cacheKey } = createEnv();
+
+  const insertedItem = {
+    id: 'item-metadata-fallback',
+    name: 'Metadata Fallback',
+    type: 'weapon',
+    rarity: 'jackpot',
+    released_at: '2024-02-02T00:00:00.000Z',
+  };
+
+  queueAuthSuccess(cacheKey, {
+    userId: 'user-metadata',
+    identityData: null,
+    userMetadata: { provider_id: '  discord-meta-123  ' },
+  });
+
+  supabaseStub.__queueResponse(cacheKey, { data: insertedItem });
+
+  const accessToken = 'token-metadata';
+  const request = createRequest('/api/items', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      name: 'Metadata Fallback',
+      type: 'weapon',
+      rarity: 'jackpot',
+      released_at: '2024-02-02T00:00:00Z',
+    }),
+  });
+
+  const response = await onRequest({ request, env } as any);
+  await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(supabaseStub.__getLastAuthToken(cacheKey), accessToken);
+
+  const lastQuery = supabaseStub.__getLastQuery(cacheKey);
+  if (!lastQuery) {
+    throw new Error('Expected Supabase query to be recorded');
+  }
+
+  const insertStep = lastQuery.steps.find((step: any) => step[0] === 'insert');
+  assert.equal(insertStep !== undefined, true, 'Expected insert step to be recorded');
+
+  const insertedPayload =
+    insertStep && Array.isArray(insertStep[1]) ? insertStep[1][0] : null;
+  if (!insertedPayload) {
+    throw new Error('Expected insert payload to be recorded');
+  }
+
+  assert.equal(insertedPayload.created_by_user_id, 'user-metadata');
+  assert.equal(insertedPayload.created_by_discord_id, 'discord-meta-123');
 });
 
 test('items API includes Supabase error messages in POST responses', async () => {

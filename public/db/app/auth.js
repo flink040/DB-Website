@@ -4,6 +4,134 @@ import { render } from './render.js';
 
 let configPromise = null;
 let clientPromise = null;
+let hasStrippedAuthHash = false;
+
+const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 Tage
+const LOGGED_IN_COOKIE_NAME = 'db_discord_logged_in';
+const DISCORD_ID_COOKIE_NAME = 'db_discord_id';
+const AUTH_HASH_SENSITIVE_KEYS = ['access_token', 'refresh_token', 'provider_token'];
+
+const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const getTrimmedString = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const extractDiscordIdFromUser = (user) => {
+  if (!isObject(user)) {
+    return null;
+  }
+
+  const identities = Array.isArray(user.identities) ? user.identities : [];
+  for (const identity of identities) {
+    if (!isObject(identity)) {
+      continue;
+    }
+    if (identity.provider !== 'discord') {
+      continue;
+    }
+
+    const identityData = identity.identity_data;
+    if (isObject(identityData)) {
+      const candidate =
+        getTrimmedString(identityData.id) ||
+        getTrimmedString(identityData.user_id) ||
+        getTrimmedString(identityData.sub) ||
+        getTrimmedString(identityData.provider_id);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  const metadata = isObject(user.user_metadata) ? user.user_metadata : null;
+  const rawCustomClaims = metadata?.custom_claims;
+  const customClaims = isObject(rawCustomClaims) ? rawCustomClaims : null;
+  const appMetadata = isObject(user.app_metadata) ? user.app_metadata : null;
+
+  return (
+    getTrimmedString(metadata?.discord_id) ||
+    getTrimmedString(metadata?.provider_id) ||
+    getTrimmedString(metadata?.sub) ||
+    getTrimmedString(customClaims?.discord_id) ||
+    getTrimmedString(customClaims?.provider_id) ||
+    getTrimmedString(customClaims?.sub) ||
+    getTrimmedString(appMetadata?.provider_id) ||
+    null
+  );
+};
+
+const deriveDiscordId = (session, profile) => {
+  const profileDiscordId = getTrimmedString(profile?.discordId);
+  if (profileDiscordId) {
+    return profileDiscordId;
+  }
+
+  const user = session?.user ?? null;
+  return extractDiscordIdFromUser(user);
+};
+
+const isSecureCookieContext = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  const protocol = window.location?.protocol;
+  return protocol === 'https:';
+};
+
+const writeCookie = (name, value, { maxAge = AUTH_COOKIE_MAX_AGE } = {}) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const safeValue = encodeURIComponent(String(value ?? ''));
+  const parts = [`${name}=${safeValue}`, 'Path=/'];
+
+  if (Number.isFinite(maxAge)) {
+    if (maxAge <= 0) {
+      parts.push('Max-Age=0');
+      parts.push('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+    } else {
+      parts.push(`Max-Age=${Math.round(maxAge)}`);
+    }
+  }
+
+  parts.push('SameSite=Lax');
+
+  if (isSecureCookieContext()) {
+    parts.push('Secure');
+  }
+
+  document.cookie = parts.join('; ');
+};
+
+const clearCookie = (name) => writeCookie(name, '', { maxAge: 0 });
+
+const syncAuthCookies = (session, profile) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  if (session) {
+    writeCookie(LOGGED_IN_COOKIE_NAME, 'true');
+
+    const discordId = deriveDiscordId(session, profile);
+
+    if (discordId) {
+      writeCookie(DISCORD_ID_COOKIE_NAME, discordId);
+    } else {
+      clearCookie(DISCORD_ID_COOKIE_NAME);
+    }
+  } else {
+    clearCookie(LOGGED_IN_COOKIE_NAME);
+    clearCookie(DISCORD_ID_COOKIE_NAME);
+  }
+};
 
 const loadConfig = async () => {
   if (!configPromise) {
@@ -92,17 +220,7 @@ const mapUserToProfile = (user) => {
     typeof metadata.avatar_url === 'string' && metadata.avatar_url.trim()
       ? metadata.avatar_url.trim()
       : null;
-  let discordId = null;
-  const identities = Array.isArray(user.identities) ? user.identities : [];
-  for (const identity of identities) {
-    if (identity?.provider === 'discord') {
-      const candidate = identity?.identity_data?.id;
-      if (typeof candidate === 'string' && candidate.trim()) {
-        discordId = candidate.trim();
-      }
-      break;
-    }
-  }
+  const discordId = extractDiscordIdFromUser(user);
   return {
     id,
     displayName,
@@ -114,11 +232,16 @@ const mapUserToProfile = (user) => {
 const applyAuthState = (updates) => {
   const authState = state.auth;
   if (!authState) return;
+  const previousSession = authState.session;
+  const previousProfile = authState.profile;
   if ('status' in updates && updates.status) {
     authState.status = updates.status;
   }
   if ('profile' in updates) {
     authState.profile = updates.profile ?? null;
+    if (!updates.profile) {
+      authState.menuOpen = false;
+    }
   }
   if ('error' in updates) {
     authState.error = updates.error ?? '';
@@ -126,7 +249,56 @@ const applyAuthState = (updates) => {
   if ('session' in updates) {
     authState.session = updates.session ?? null;
   }
+  if ('menuOpen' in updates) {
+    authState.menuOpen = Boolean(updates.menuOpen);
+  }
+
+  const sessionChanged = 'session' in updates && authState.session !== previousSession;
+  const profileChanged = 'profile' in updates && authState.profile !== previousProfile;
+
+  if (sessionChanged || profileChanged) {
+    syncAuthCookies(authState.session, authState.profile);
+  }
+
   render();
+};
+
+const stripAuthHashFromLocation = () => {
+  if (hasStrippedAuthHash) {
+    return;
+  }
+  hasStrippedAuthHash = true;
+
+  if (typeof window === 'undefined' || !window.location) {
+    return;
+  }
+
+  const rawHash = window.location.hash;
+  if (typeof rawHash !== 'string' || rawHash.length <= 1) {
+    return;
+  }
+
+  const trimmedHash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+  let containsSensitiveAuthData = false;
+
+  if (typeof URLSearchParams === 'function') {
+    const params = new URLSearchParams(trimmedHash);
+    containsSensitiveAuthData = AUTH_HASH_SENSITIVE_KEYS.some((key) => params.has(key));
+  } else {
+    const lowerCasedHash = trimmedHash.toLowerCase();
+    containsSensitiveAuthData = AUTH_HASH_SENSITIVE_KEYS.some((key) =>
+      lowerCasedHash.includes(`${key.toLowerCase()}=`)
+    );
+  }
+
+  if (!containsSensitiveAuthData) {
+    return;
+  }
+
+  if (typeof window.history?.replaceState === 'function') {
+    const newUrl = `${window.location.pathname}${window.location.search}`;
+    window.history.replaceState(window.history.state, document.title, newUrl);
+  }
 };
 
 const syncProfileWithServer = async (session, profile) => {
@@ -143,11 +315,7 @@ const syncProfileWithServer = async (session, profile) => {
     return;
   }
 
-  let discordId = null;
-  const candidateDiscordId = profile?.discordId;
-  if (typeof candidateDiscordId === 'string' && candidateDiscordId.trim()) {
-    discordId = candidateDiscordId.trim();
-  }
+  const discordId = deriveDiscordId(session, profile);
 
   try {
     const response = await fetch('/api/users', {
@@ -181,7 +349,7 @@ const syncProfileWithServer = async (session, profile) => {
 };
 
 export const initializeAuth = async () => {
-  applyAuthState({ status: 'loading', error: '', session: null, profile: null });
+  applyAuthState({ status: 'loading', error: '', session: null, profile: null, menuOpen: false });
   let pendingAuthError = '';
   let codeFromQuery = '';
   try {
@@ -211,7 +379,7 @@ export const initializeAuth = async () => {
         paramsToDelete.push('code');
       }
       if (pendingAuthError) {
-        applyAuthState({ error: pendingAuthError });
+        applyAuthState({ error: pendingAuthError, menuOpen: false });
       }
       if (paramsToDelete.length && typeof window.history?.replaceState === 'function') {
         paramsToDelete.forEach((name) => params.delete(name));
@@ -251,7 +419,13 @@ export const initializeAuth = async () => {
     }
     const hasSessionOrProfile = Boolean(session) || Boolean(profile);
     const nextErrorMessage = hasSessionOrProfile ? '' : pendingAuthError;
-    applyAuthState({ status: 'ready', profile, session, error: nextErrorMessage });
+    applyAuthState({
+      status: 'ready',
+      profile,
+      session,
+      error: nextErrorMessage,
+      menuOpen: false,
+    });
     client.auth.onAuthStateChange((_event, nextSession) => {
       const nextProfile = mapUserToProfile(nextSession?.user ?? null);
       const nextError = nextSession ? '' : state.auth?.error ?? '';
@@ -260,6 +434,7 @@ export const initializeAuth = async () => {
         profile: nextProfile,
         session: nextSession ?? null,
         error: nextError,
+        menuOpen: false,
       });
       if (nextSession) {
         void syncProfileWithServer(nextSession, nextProfile);
@@ -273,14 +448,22 @@ export const initializeAuth = async () => {
       error instanceof Error && error.message
         ? error.message
         : 'Anmeldung konnte nicht initialisiert werden.';
-    applyAuthState({ status: 'error', profile: null, session: null, error: message });
+    applyAuthState({
+      status: 'error',
+      profile: null,
+      session: null,
+      error: message,
+      menuOpen: false,
+    });
+  } finally {
+    stripAuthHashFromLocation();
   }
 };
 
 export const signInWithDiscord = async () => {
   const client = await getClient();
   const { discordRedirectUri } = await loadConfig();
-  applyAuthState({ status: 'signing-in', error: '' });
+  applyAuthState({ status: 'signing-in', error: '', menuOpen: false });
   try {
     const { error } = await client.auth.signInWithOAuth({
       provider: 'discord',
@@ -297,26 +480,26 @@ export const signInWithDiscord = async () => {
       error instanceof Error && error.message
         ? error.message
         : 'Anmeldung mit Discord fehlgeschlagen.';
-    applyAuthState({ status: 'ready', error: message });
+    applyAuthState({ status: 'ready', error: message, menuOpen: false });
     throw error;
   }
 };
 
 export const signOut = async () => {
   const client = await getClient();
-  applyAuthState({ status: 'signing-out' });
+  applyAuthState({ status: 'signing-out', menuOpen: false });
   try {
     const { error } = await client.auth.signOut();
     if (error) {
       throw error;
     }
-    applyAuthState({ status: 'ready', profile: null, session: null, error: '' });
+    applyAuthState({ status: 'ready', profile: null, session: null, error: '', menuOpen: false });
   } catch (error) {
     const message =
       error instanceof Error && error.message
         ? error.message
         : 'Abmeldung fehlgeschlagen.';
-    applyAuthState({ status: 'ready', error: message });
+    applyAuthState({ status: 'ready', error: message, menuOpen: false });
     throw error;
   }
 };

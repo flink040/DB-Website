@@ -39,30 +39,51 @@
           />
         </form>
 
-        <div id="authPanel" class="auth-panel" data-auth-state="anonymous">
+        <div id="authPanel" class="auth-panel" data-auth-state="anonymous" data-auth-menu="closed">
           <p class="auth-panel__label">Login Bereich</p>
-          <div id="authUser" class="auth-panel__user" hidden aria-hidden="true">
-            <div class="auth-panel__avatar" id="authUserAvatar">
-              <img id="authUserAvatarImage" alt="" hidden />
-              <span class="auth-panel__avatar-fallback" aria-hidden="true"></span>
-            </div>
-            <div class="auth-panel__details">
-              <span id="authUserName" class="auth-panel__name"></span>
-              <button
-                id="authLogoutButton"
-                class="auth-panel__action auth-panel__logout"
-                type="button"
-                hidden
-                aria-hidden="true"
-              >
-                Abmelden
-              </button>
-            </div>
-          </div>
-          <button id="authLoginButton" class="auth-panel__action auth-panel__login" type="button">
+          <button
+            id="authLoginButton"
+            class="auth-panel__action auth-panel__login"
+            type="button"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="authMenu"
+          >
             <span class="auth-panel__login-icon" aria-hidden="true"></span>
             <span class="auth-panel__login-text">Mit Discord anmelden</span>
           </button>
+          <div
+            id="authMenu"
+            class="auth-panel__menu"
+            role="menu"
+            aria-labelledby="authLoginButton"
+            hidden
+          >
+            <button
+              id="authProfileButton"
+              class="auth-panel__menu-item auth-panel__menu-item--profile"
+              type="button"
+              role="menuitem"
+            >
+              <span class="auth-panel__avatar" id="authUserAvatar">
+                <img id="authUserAvatarImage" alt="" hidden />
+                <span class="auth-panel__avatar-fallback" aria-hidden="true"></span>
+              </span>
+              <span class="auth-panel__menu-copy">
+                <span class="auth-panel__menu-title">Profil</span>
+                <span id="authUserName" class="auth-panel__menu-subtitle"></span>
+              </span>
+              <span class="auth-panel__menu-chevron" aria-hidden="true"></span>
+            </button>
+            <button
+              id="authLogoutButton"
+              class="auth-panel__menu-item auth-panel__menu-item--logout"
+              type="button"
+              role="menuitem"
+            >
+              Logout
+            </button>
+          </div>
           <p id="authStatus" class="auth-panel__status" aria-live="polite" hidden></p>
         </div>
       </div>
