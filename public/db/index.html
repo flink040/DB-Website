@@ -13,9 +13,9 @@
           <div class="brand__icon" aria-hidden="true">⚔️</div>
           <div class="brand__text">
             <p class="brand__eyebrow">OP Item Datenbank</p>
-            <h1 class="brand__title">Legendäre Ausrüstung entdecken</h1>
+            <h1 class="brand__title">Finde dein neues Item</h1>
             <p class="brand__lead">
-              Durchsuche die Sammlung, filtere nach Typ und Seltenheit und entdecke neue Favoriten.
+              Durchsuche die Datenbank, filtere nach Typ und Seltenheit und entdecke dein neues Lieblingsitem.
             </p>
           </div>
         </div>
@@ -57,7 +57,7 @@
         <form id="filterForm" class="filters" autocomplete="off">
           <label class="filter">
             <span class="filter__label">Item-Typ</span>
-            <select id="typeFilter" name="type">
+            <select id="typeFilter" name="type" data-enhance-select>
               <option value="">Alle Typen</option>
               <option value="helm">Helm</option>
               <option value="brustplatte">Brustplatte</option>
@@ -81,14 +81,14 @@
           </label>
           <label class="filter">
             <span class="filter__label">Seltenheit</span>
-            <select id="rarityFilter" name="rarity">
+            <select id="rarityFilter" name="rarity" data-enhance-select>
               <option value="">Alle Seltenheiten</option>
-              <option value="common">Common</option>
-              <option value="uncommon">Uncommon</option>
-              <option value="rare">Rare</option>
-              <option value="epic">Epic</option>
-              <option value="legendary">Legendary</option>
-              <option value="mythic">Mythic</option>
+              <option value="selten">Selten</option>
+              <option value="episch">Episch</option>
+              <option value="unbezahlbar">Unbezahlbar</option>
+              <option value="legendaer">Legendär</option>
+              <option value="jackpot">Jackpot</option>
+              <option value="mega-jackpot">Mega Jackpot</option>
             </select>
           </label>
         </form>
@@ -131,7 +131,7 @@
           </div>
           <div class="modal__field">
             <label for="addItemType">Typ</label>
-            <select id="addItemType" name="type" required>
+            <select id="addItemType" name="type" required data-enhance-select>
               <option value="">Bitte auswählen</option>
               <option value="helm">Helm</option>
               <option value="brustplatte">Brustplatte</option>
@@ -155,14 +155,14 @@
           </div>
           <div class="modal__field">
             <label for="addItemRarity">Seltenheit</label>
-            <select id="addItemRarity" name="rarity" required>
+            <select id="addItemRarity" name="rarity" required data-enhance-select>
               <option value="">Bitte auswählen</option>
-              <option value="common">Common</option>
-              <option value="uncommon">Uncommon</option>
-              <option value="rare">Rare</option>
-              <option value="epic">Epic</option>
-              <option value="legendary">Legendary</option>
-              <option value="mythic">Mythic</option>
+              <option value="selten">Selten</option>
+              <option value="episch">Episch</option>
+              <option value="unbezahlbar">Unbezahlbar</option>
+              <option value="legendaer">Legendär</option>
+              <option value="jackpot">Jackpot</option>
+              <option value="mega-jackpot">Mega Jackpot</option>
             </select>
           </div>
           <div class="modal__field">

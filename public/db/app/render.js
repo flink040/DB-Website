@@ -1,7 +1,7 @@
 import { elements } from './elements.js';
 import { applyFilters, filtersApplied } from './filters.js';
 import { state } from './state.js';
-import { formatLabel, getInitial, getStarLevel, normalizeFilterValue, renderStars } from './utils.js';
+import { formatLabel, getInitial, getRarityKey, getStarLevel, renderStars } from './utils.js';
 import { openDetail } from './detail.js';
 
 const getAuthMessage = () => {
@@ -215,8 +215,12 @@ const createCard = (item) => {
 
   const rarity = document.createElement('span');
   rarity.className = 'rarity-badge';
-  const rarityValue = normalizeFilterValue(item?.rarity);
-  rarity.dataset.rarity = rarityValue;
+  const rarityValue = getRarityKey(item?.rarity);
+  if (rarityValue) {
+    rarity.dataset.rarity = rarityValue;
+  } else {
+    delete rarity.dataset.rarity;
+  }
   rarity.textContent = formatLabel(item?.rarity);
 
   const type = document.createElement('span');
