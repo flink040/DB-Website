@@ -9,6 +9,7 @@ let hasStrippedAuthHash = false;
 const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 Tage
 const LOGGED_IN_COOKIE_NAME = 'db_discord_logged_in';
 const DISCORD_ID_COOKIE_NAME = 'db_discord_id';
+const AUTH_HASH_SENSITIVE_KEYS = ['access_token', 'refresh_token', 'provider_token'];
 
 const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
@@ -280,20 +281,14 @@ const stripAuthHashFromLocation = () => {
   const trimmedHash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
   let containsSensitiveAuthData = false;
 
-  try {
+  if (typeof URLSearchParams === 'function') {
     const params = new URLSearchParams(trimmedHash);
-    for (const key of AUTH_HASH_SENSITIVE_KEYS) {
-      if (params.has(key)) {
-        containsSensitiveAuthData = true;
-        break;
-      }
-    }
-  } catch (error) {
+    containsSensitiveAuthData = AUTH_HASH_SENSITIVE_KEYS.some((key) => params.has(key));
+  } else {
     const lowerCasedHash = trimmedHash.toLowerCase();
-    containsSensitiveAuthData =
-      lowerCasedHash.includes('access_token=') ||
-      lowerCasedHash.includes('refresh_token=') ||
-      lowerCasedHash.includes('provider_token=');
+    containsSensitiveAuthData = AUTH_HASH_SENSITIVE_KEYS.some((key) =>
+      lowerCasedHash.includes(`${key.toLowerCase()}=`)
+    );
   }
 
   if (!containsSensitiveAuthData) {
