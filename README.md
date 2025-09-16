@@ -6,7 +6,7 @@ Dieser Leitfaden fasst die notwendigen Schritte zusammen, um das Projekt auf Clo
 
 1. **Repository vorbereiten** – Projekt klonen und die lokalen Abhängigkeiten installieren (z. B. `npm install`, `pnpm install` oder `yarn install`, je nach verwendetem Paketmanager).
 2. **Lokale Variablen setzen** – Die Datei [`.dev.vars`](.dev.vars) mit individuellen Werten befüllen. Wrangler lädt diese Werte automatisch für `wrangler dev`.
-3. **Wrangler-Konfiguration anpassen** – In [`wrangler.toml`](wrangler.toml) die Platzhalter (`PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `API_BASE`, `ITEM_CACHE`) durch die realen Projektwerte ersetzen.
+3. **Wrangler-Konfiguration anpassen** – In [`wrangler.toml`](wrangler.toml) die Platzhalter (`PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `API_BASE`, `ITEMS_DISCORD_ID_COLUMN`, `ITEM_CACHE`) durch die realen Projektwerte ersetzen.
 4. **Cloudflare-Secrets speichern** – Hinterlege `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` und bei Bedarf `DISCORD_REDIRECT_URI` per Wrangler, siehe Abschnitt „Secrets in Cloudflare setzen“.
 5. **GitHub Actions konfigurieren** – In GitHub die Secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PAGES_PROJECT_NAME` (und optional `CF_PAGES_WORKER_BINDINGS`) hinterlegen. Danach sorgt der Workflow automatisch für Linting/Typechecking bei Pull Requests sowie für Deployments beim Push auf `main`.
 6. **Deployment testen** – Lokal mit `wrangler dev` prüfen und anschließend einen Commit nach `main` pushen. Der GitHub-Workflow übernimmt das Pages-Deployment.
@@ -23,6 +23,7 @@ compatibility_date = "2023-12-01"
 PUBLIC_SUPABASE_URL = "https://your-supabase-project.supabase.co"
 PUBLIC_SUPABASE_ANON_KEY = "public-anon-key"
 API_BASE = "https://api.example.com"
+ITEMS_DISCORD_ID_COLUMN = "created_by_discord_id"
 
 [[kv_namespaces]]
 binding = "ITEM_CACHE"
@@ -32,6 +33,7 @@ preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
 
 - `PUBLIC_*` Variablen stehen im Frontend zur Verfügung.
 - `API_BASE` wird für interne API-Aufrufe genutzt.
+- `ITEMS_DISCORD_ID_COLUMN` legt fest, in welcher Spalte der Tabelle `items` die Discord-ID gespeichert wird (Standard: `created_by_discord_id`).
 - `ITEM_CACHE` bindet das Cloudflare KV-Namespace an das Projekt; `preview_id` ist optional, aber hilfreich für Staging-Deployments.
 
 ### `.dev.vars`
@@ -46,6 +48,7 @@ API_BASE="http://localhost:8788"
 DISCORD_CLIENT_ID="1414567063221178429"
 DISCORD_CLIENT_SECRET="zJY-4MIyIzBU7xSGfduhmxKPff95zTOT"
 DISCORD_REDIRECT_URI="https://db-website-24f.pages.dev"
+ITEMS_DISCORD_ID_COLUMN="created_by_discord_id"
 ```
 
 Diese Datei dient als Vorlage und kann lokal angepasst werden. Für produktive Umgebungen sollten sensible Secrets (z. B. das Discord-Client-Secret) ausschließlich via `wrangler secret` gesetzt werden.
@@ -59,11 +62,21 @@ Diese Datei dient als Vorlage und kann lokal angepasst werden. Für produktive U
 | `SUPABASE_URL` | Secret (Functions) | Interne Supabase-URL für Cloudflare Functions. | `https://taejvzqmlswbgsknthxz.supabase.com` |
 | `SUPABASE_ANON_KEY` | Secret (Functions) | Supabase-Anon-Key für serverseitige Aufrufe. | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…` |
 | `API_BASE` | Öffentlich (Functions) | Basis-URL des Pages-Deployments für API-Aufrufe. | `https://db-website-24f.pages.dev` |
+| `ITEMS_DISCORD_ID_COLUMN` | Öffentlich (Functions) | Name der `items`-Spalte, in der die Discord-ID der Ersteller:innen gespeichert wird. | `created_by_discord_id` |
 | `DISCORD_CLIENT_ID` | Secret (Functions) | Discord-OAuth Client ID (Supabase → Auth → Providers). | `1414567063221178429` |
 | `DISCORD_CLIENT_SECRET` | Secret (Functions) | Discord-OAuth Client Secret. | `zJY-4MIyIzBU7xSGfduhmxKPff95zTOT` |
 | `DISCORD_REDIRECT_URI` | Secret (Functions, optional) | Weiterleitungs-URL nach der Discord-Anmeldung; muss mit Discord/Supabase übereinstimmen. | `https://db-website-24f.pages.dev` |
 
 Passe die Werte für deine eigene Umgebung an. Die hier aufgeführten Beispielwerte entsprechen der aktuellen Konfiguration.
+
+### Supabase Tabelle `items`
+
+Die Items-API erwartet, dass die Supabase-Tabelle `items` Metadaten zu den Ersteller:innen speichert. Standardmäßig werden folgende Spalten genutzt:
+
+- `created_by_user_id` – verweist auf die Supabase-User-ID der Person, die den Datensatz angelegt hat.
+- `created_by_discord_id` – speichert die Discord-ID der Person und wird über `ITEMS_DISCORD_ID_COLUMN` konfigurierbar gemacht.
+
+Passe den Wert von `ITEMS_DISCORD_ID_COLUMN` an, falls die Spalte in deiner Datenbank anders heißt. Stelle außerdem sicher, dass die Rolle, mit der die API auf Supabase zugreift, Schreibrechte für diese Spalte besitzt.
 
 ### GitHub Actions Workflow
 
