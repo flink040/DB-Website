@@ -162,7 +162,10 @@ const handlePostRequest = async (request: Request, env: Env): Promise<Response> 
 
   if (!token) {
     console.error('ITEMS_API_TOKEN is not configured; refusing POST /api/items request');
-    return jsonError('Authorization is not configured for this endpoint.', 500);
+    return jsonError(
+      'Bitte logge dich ein, bevor du Items zur Datenbank hinzufügst',
+      500
+    );
   }
 
   const providedToken = extractBearerToken(request.headers.get('Authorization'));
