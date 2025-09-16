@@ -66,6 +66,9 @@ Diese Datei dient als Vorlage und kann lokal angepasst werden. Für produktive U
 | `DISCORD_CLIENT_ID` | Secret (Functions) | Discord-OAuth Client ID (Supabase → Auth → Providers). | `1414567063221178429` |
 | `DISCORD_CLIENT_SECRET` | Secret (Functions) | Discord-OAuth Client Secret. | `zJY-4MIyIzBU7xSGfduhmxKPff95zTOT` |
 | `DISCORD_REDIRECT_URI` | Secret (Functions, optional) | Weiterleitungs-URL nach der Discord-Anmeldung; muss mit Discord/Supabase übereinstimmen. | `https://db-website-24f.pages.dev` |
+| `PROFILES_TABLE` | Öffentlich (Functions, optional) | Name der Tabelle, in der Benutzerprofile gespeichert werden. | `profiles` |
+| `PROFILES_USER_ID_COLUMN` | Öffentlich (Functions, optional) | Spalte, die die Supabase-User-ID enthält (Standard: `id`). | `id` |
+| `PROFILES_DISCORD_ID_COLUMN` | Öffentlich (Functions, optional) | Spalte für die Discord-ID (Standard: `discord_id`). | `discord_id` |
 
 Passe die Werte für deine eigene Umgebung an. Die hier aufgeführten Beispielwerte entsprechen der aktuellen Konfiguration.
 
@@ -77,6 +80,37 @@ Die Items-API erwartet, dass die Supabase-Tabelle `items` Metadaten zu den Erste
 - `created_by_discord_id` – speichert die Discord-ID der Person und wird über `ITEMS_DISCORD_ID_COLUMN` konfigurierbar gemacht.
 
 Passe den Wert von `ITEMS_DISCORD_ID_COLUMN` an, falls die Spalte in deiner Datenbank anders heißt. Stelle außerdem sicher, dass die Rolle, mit der die API auf Supabase zugreift, Schreibrechte für diese Spalte besitzt.
+
+### Supabase Tabelle `profiles`
+
+Der Endpoint [`/api/users`](functions/api/users.ts) legt nach einer erfolgreichen Anmeldung automatisch einen Datensatz in der Tabelle `profiles` an bzw. aktualisiert ihn. Standardmäßig werden folgende Spalten erwartet:
+
+- `id` – Primärschlüssel (UUID), verweist auf `auth.users.id` und identifiziert den Supabase-Account.
+- `discord_id` – Textspalte für die Discord-ID; der Wert wird bei jedem Login aktualisiert.
+- (optional) `updated_at` – `timestamp with time zone` mit `DEFAULT now()`, um den letzten Login-Zeitpunkt nachvollziehen zu können.
+
+Sollten die Spalten- oder Tabellennamen abweichen, können sie über die Environment-Variablen `PROFILES_TABLE`, `PROFILES_USER_ID_COLUMN` und `PROFILES_DISCORD_ID_COLUMN` angepasst werden.
+
+Aktiviere für die Tabelle `profiles` die Row-Level-Security und erlaube authentifizierten Nutzer:innen, nur ihren eigenen Datensatz zu schreiben:
+
+```sql
+alter table public.profiles enable row level security;
+
+create policy "Users can insert their profile"
+  on public.profiles
+  for insert
+  with check (id = auth.uid());
+
+create policy "Users can update their profile"
+  on public.profiles
+  for update
+  using (id = auth.uid())
+  with check (id = auth.uid());
+
+grant insert, update on public.profiles to authenticated;
+```
+
+Die Cloudflare Function ruft Supabase mit dem Access Token des angemeldeten Users auf. Dadurch greift automatisch die definierte RLS-Policy und keine zusätzlichen Server-Keys (Service Role) sind notwendig.
 
 ### GitHub Actions Workflow
 
