@@ -27,15 +27,28 @@ const updateAuthControls = () => {
   const profile = auth.profile ?? null;
   const status = auth.status ?? 'idle';
   const statusMessage = getAuthMessage();
+  const hasProfile = Boolean(profile);
+  const isBusy = status === 'loading' || status === 'signing-in' || status === 'signing-out';
+
+  const authPanel = elements.authPanel;
+  if (authPanel) {
+    authPanel.dataset.authState = hasProfile ? 'authenticated' : 'anonymous';
+  }
 
   const loginButton = elements.authLoginButton;
   if (loginButton) {
-    const isBusy = status === 'loading' || status === 'signing-in' || status === 'signing-out';
-    const hasProfile = Boolean(profile);
     loginButton.hidden = hasProfile;
+    loginButton.setAttribute('aria-hidden', hasProfile ? 'true' : 'false');
     loginButton.disabled = isBusy || hasProfile;
-    loginButton.textContent = status === 'signing-in' ? 'Weiterleitung…' : 'Mit Discord anmelden';
+    loginButton.tabIndex = hasProfile ? -1 : 0;
     loginButton.setAttribute('aria-busy', isBusy ? 'true' : 'false');
+    const loginLabel = loginButton.querySelector('.auth-panel__login-text');
+    const loginText = status === 'signing-in' ? 'Weiterleitung…' : 'Mit Discord anmelden';
+    if (loginLabel) {
+      loginLabel.textContent = loginText;
+    } else {
+      loginButton.textContent = loginText;
+    }
   }
 
   const userWrapper = elements.authUser;
@@ -43,7 +56,6 @@ const updateAuthControls = () => {
   const userAvatarWrapper = elements.authUserAvatar;
   const userAvatarImage = elements.authUserAvatarImage;
   if (userWrapper) {
-    const hasProfile = Boolean(profile);
     userWrapper.hidden = !hasProfile;
     userWrapper.setAttribute('aria-hidden', hasProfile ? 'false' : 'true');
     if (userName) {
@@ -83,9 +95,16 @@ const updateAuthControls = () => {
   const logoutButton = elements.authLogoutButton;
   if (logoutButton) {
     const isSigningOut = status === 'signing-out';
-    const hasProfile = Boolean(profile);
-    logoutButton.disabled = isSigningOut;
-    logoutButton.hidden = !hasProfile;
+    const shouldShow = hasProfile;
+    logoutButton.disabled = isSigningOut || !shouldShow;
+    logoutButton.hidden = !shouldShow;
+    if (shouldShow) {
+      logoutButton.removeAttribute('aria-hidden');
+    } else {
+      logoutButton.setAttribute('aria-hidden', 'true');
+    }
+    logoutButton.tabIndex = shouldShow ? 0 : -1;
+    logoutButton.setAttribute('aria-busy', isSigningOut ? 'true' : 'false');
     logoutButton.textContent = isSigningOut ? 'Abmelden…' : 'Abmelden';
   }
 

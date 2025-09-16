@@ -4,6 +4,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: dark;
   --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -227,23 +231,29 @@ select {
   margin: 0 auto;
   display: grid;
   gap: clamp(2rem, 6vw, 3rem);
+  justify-items: stretch;
 }
 
 @media (min-width: 960px) {
   .page-header__inner {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 2.75fr) minmax(0, 1.25fr);
+    grid-template-areas:
+      'brand auth'
+      'search auth';
     align-items: start;
   }
 
   .page-header__inner > .brand {
-    grid-column: 1 / -1;
+    grid-area: brand;
   }
 
   .page-header__inner > .search {
+    grid-area: search;
     justify-self: stretch;
   }
 
   .page-header__inner > .auth-panel {
+    grid-area: auth;
     justify-self: end;
   }
 }
@@ -303,21 +313,39 @@ select {
 }
 
 .auth-panel {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(160deg, rgba(15, 23, 42, 0.96), rgba(30, 64, 175, 0.45)) padding-box,
+    linear-gradient(135deg, rgba(96, 165, 250, 0.7), rgba(129, 140, 248, 0.5), rgba(56, 189, 248, 0.45)) border-box;
+  border: 1px solid transparent;
+  background-origin: padding-box, border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: 0 22px 50px rgba(7, 14, 32, 0.55);
   width: min(100%, 320px);
   align-self: start;
-  box-shadow: var(--shadow-md);
+  margin-left: auto;
+  overflow: hidden;
+}
+
+.auth-panel__label {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.8);
 }
 
 .auth-panel__user {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
   align-items: center;
-  gap: 0.75rem;
+  min-width: 0;
 }
 
 .auth-panel__avatar {
@@ -357,44 +385,110 @@ select {
 .auth-panel__details {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.45rem;
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .auth-panel__name {
   font-weight: 600;
   font-size: 1rem;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .auth-panel__action {
-  border-radius: var(--radius-sm);
-  padding: 0.55rem 1rem;
-  background: rgba(30, 64, 175, 0.55);
-  border: 1px solid rgba(96, 165, 250, 0.4);
+  --auth-action-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border-radius: 999px;
+  padding: 0.65rem 1.2rem;
+  border: 1px solid rgba(96, 165, 250, 0.45);
   color: var(--color-text);
-  transition: background var(--transition), transform var(--transition), border-color var(--transition);
+  font-weight: 600;
+  background: transparent;
+  box-shadow: var(--auth-action-shadow, none);
+  transition: background var(--transition), transform var(--transition), border-color var(--transition),
+    box-shadow var(--transition);
 }
 
-.auth-panel__action:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.6);
-  border-color: rgba(96, 165, 250, 0.65);
+.auth-panel__action:hover:not(:disabled),
+.auth-panel__action:focus-visible:not(:disabled) {
   transform: translateY(-1px);
+}
+
+.auth-panel__action:focus-visible {
+  outline: none;
+  box-shadow: var(--auth-action-shadow, none), 0 0 0 3px rgba(96, 165, 250, 0.35);
 }
 
 .auth-panel__action:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--auth-action-shadow, none);
 }
 
 .auth-panel__login {
-  justify-self: stretch;
-  text-align: center;
-  font-weight: 600;
+  --auth-action-shadow: 0 15px 30px rgba(8, 16, 36, 0.45);
+  width: 100%;
+  justify-content: center;
+  background:
+    linear-gradient(155deg, rgba(37, 99, 235, 0.55), rgba(59, 130, 246, 0.35)) padding-box,
+    linear-gradient(155deg, rgba(96, 165, 250, 0.8), rgba(129, 140, 248, 0.65)) border-box;
+  border: 1px solid transparent;
+  background-origin: padding-box, border-box;
+  background-clip: padding-box, border-box;
+}
+
+.auth-panel__login:hover:not(:disabled),
+.auth-panel__login:focus-visible:not(:disabled) {
+  --auth-action-shadow: 0 20px 38px rgba(8, 16, 36, 0.5);
+  background:
+    linear-gradient(155deg, rgba(37, 99, 235, 0.68), rgba(96, 165, 250, 0.45)) padding-box,
+    linear-gradient(155deg, rgba(96, 165, 250, 0.95), rgba(129, 140, 248, 0.75)) border-box;
 }
 
 .auth-panel__logout {
   align-self: flex-start;
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.18);
   border-color: rgba(148, 163, 184, 0.4);
+  font-weight: 500;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.auth-panel__logout:hover:not(:disabled),
+.auth-panel__logout:focus-visible:not(:disabled) {
+  background: rgba(148, 163, 184, 0.28);
+  border-color: rgba(148, 163, 184, 0.52);
+}
+
+.auth-panel__login-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: linear-gradient(140deg, rgba(191, 219, 254, 0.25), rgba(59, 130, 246, 0.65));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.auth-panel__login-icon::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 199' fill='%23ffffff'%3E%3Cpath d='M216.856 16.597C198.562 8.227 178.623 2.263 157.765 0c-2.086 3.77-4.523 8.861-6.2 12.9-18.293-2.694-36.43-2.694-54.291 0-1.677-4.273-4.2-9.13-6.38-12.9-20.86 2.263-40.8 8.404-59.09 16.773C8.106 50.205 2.755 83.064 4.785 115.55c24.228 18.08 47.733 29.026 70.79 36.23 5.708-7.802 10.804-16.103 15.18-24.91-8.43-3.145-16.472-6.99-24.12-11.623 2.023-1.514 4.02-3.08 5.984-4.706 45.806 21.327 95.094 21.327 140.51 0 1.964 1.626 3.96 3.192 5.983 4.706-7.646 4.632-15.69 8.477-24.119 11.622 4.377 8.807 9.472 17.107 15.18 24.91 23.278-7.204 46.783-18.15 71.012-36.23 2.9-46.134-4.958-78.68-26.339-98.953ZM85.028 135.095c-13.737 0-24.947-12.63-24.947-28.165 0-15.534 10.87-28.164 24.947-28.164 13.916 0 25.127 12.63 24.947 28.164 0 15.535-10.87 28.165-24.947 28.165Zm85.944 0c-13.737 0-24.948-12.63-24.948-28.165 0-15.534 10.87-28.164 24.948-28.164 13.916 0 25.126 12.63 24.947 28.164 0 15.535-10.87 28.165-24.947 28.165Z'/%3E%3C/svg%3E")
+    center/contain no-repeat;
+  opacity: 0.94;
+}
+
+.auth-panel__login-text {
+  white-space: nowrap;
 }
 
 .auth-panel__status {
