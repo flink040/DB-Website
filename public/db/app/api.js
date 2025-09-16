@@ -2,6 +2,31 @@ import { PAGE_SIZE } from './constants.js';
 import { render, setLoading } from './render.js';
 import { state } from './state.js';
 
+const createResponseError = async (response) => {
+  let serverMessage = '';
+  try {
+    const data = await response.json();
+    const message = typeof data?.error === 'string' ? data.error.trim() : '';
+    if (message) {
+      serverMessage = message;
+    }
+  } catch {
+    // ignore JSON parse errors
+  }
+
+  const error = new Error(serverMessage || `HTTP ${response.status}`);
+  error.status = response.status;
+  if (serverMessage) {
+    error.serverMessage = serverMessage;
+  }
+  return error;
+};
+
+const getServerMessage = (error) => {
+  const message = typeof error?.serverMessage === 'string' ? error.serverMessage.trim() : '';
+  return message || '';
+};
+
 export const loadItems = async ({ reset = false } = {}) => {
   const token = ++state.lastListToken;
 
@@ -23,7 +48,7 @@ export const loadItems = async ({ reset = false } = {}) => {
   try {
     const response = await fetch(`/api/items?${params.toString()}`);
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw await createResponseError(response);
     }
     const payload = await response.json();
     if (token !== state.lastListToken) return;
@@ -39,8 +64,12 @@ export const loadItems = async ({ reset = false } = {}) => {
         state.items = [];
       }
       state.hasMore = false;
-      state.error = 'Items konnten nicht geladen werden.';
-      console.error(error);
+      const fallbackMessage = 'Items konnten nicht geladen werden.';
+      const serverMessage = getServerMessage(error);
+      const displayMessage = serverMessage || fallbackMessage;
+      state.error = displayMessage;
+      const logMessage = serverMessage || error?.message || fallbackMessage;
+      console.error('Failed to load items:', logMessage, error);
     }
   } finally {
     if (token === state.lastListToken) {
@@ -70,7 +99,7 @@ export const searchItems = async ({ page, reset }) => {
   try {
     const response = await fetch(`/api/search?${params.toString()}`);
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw await createResponseError(response);
     }
     const payload = await response.json();
     if (token !== state.lastSearchToken) return;
@@ -90,8 +119,12 @@ export const searchItems = async ({ page, reset }) => {
         state.searchPage = 0;
       }
       state.searchHasMore = false;
-      state.error = 'Suche fehlgeschlagen.';
-      console.error(error);
+      const fallbackMessage = 'Suche fehlgeschlagen.';
+      const serverMessage = getServerMessage(error);
+      const displayMessage = serverMessage || fallbackMessage;
+      state.error = displayMessage;
+      const logMessage = serverMessage || error?.message || fallbackMessage;
+      console.error('Failed to search items:', logMessage, error);
     }
   } finally {
     if (token === state.lastSearchToken) {
