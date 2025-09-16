@@ -7,7 +7,10 @@ test('search API returns CORS headers for OPTIONS requests', async () => {
   const response = await onRequest({ request, env: {} } as any);
 
   assert.equal(response.status, 204);
-  assert.equal(response.headers.get('Access-Control-Allow-Methods'), 'GET, OPTIONS');
+  assert.equal(
+    response.headers.get('Access-Control-Allow-Methods'),
+    'GET, POST, OPTIONS'
+  );
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
 });
 

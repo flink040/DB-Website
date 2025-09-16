@@ -2,6 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import { getSupabaseClient, type SupabaseEnv } from '../../lib/supabase';
 import {
   jsonError,
+  jsonResponse,
   preflightResponse,
   withCache,
   type CacheEnv,
@@ -17,7 +18,11 @@ interface Item {
   [key: string]: unknown;
 }
 
-type Env = SupabaseEnv & CacheEnv;
+interface ItemsApiEnv {
+  ITEMS_API_TOKEN?: string;
+}
+
+type Env = SupabaseEnv & CacheEnv & ItemsApiEnv;
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -26,6 +31,10 @@ interface Cursor {
   releasedAt?: string;
   id?: string;
 }
+
+type ValidationResult =
+  | { data: Record<string, unknown> }
+  | { error: string };
 
 const parseCursor = (value: string | null): Cursor | null => {
   if (!value) {
@@ -73,9 +82,167 @@ const buildCursor = (item: Item | undefined): string | null => {
   return item.id ?? null;
 };
 
+const extractBearerToken = (header: string | null): string | null => {
+  if (!header) {
+    return null;
+  }
+
+  const trimmed = header.trim();
+
+  if (!trimmed.toLowerCase().startsWith('bearer ')) {
+    return null;
+  }
+
+  const token = trimmed.slice('bearer '.length).trim();
+  return token || null;
+};
+
+const validateNewItemPayload = (payload: unknown): ValidationResult => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { error: 'Request body must be a JSON object.' };
+  }
+
+  const record = payload as Record<string, unknown>;
+  const errors: string[] = [];
+
+  const readRequiredString = (value: unknown, field: string): string | null => {
+    if (typeof value !== 'string') {
+      errors.push(`${field} must be a string.`);
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      errors.push(`${field} must not be empty.`);
+      return null;
+    }
+
+    return trimmed;
+  };
+
+  const name = readRequiredString(record.name, 'name');
+  const type = readRequiredString(record.type, 'type');
+  const rarity = readRequiredString(record.rarity, 'rarity');
+
+  let releasedAtIso: string | null = null;
+  if (typeof record.released_at !== 'string') {
+    errors.push('released_at must be an ISO-8601 date string.');
+  } else {
+    const trimmed = record.released_at.trim();
+    if (!trimmed) {
+      errors.push('released_at must not be empty.');
+    } else {
+      const parsed = new Date(trimmed);
+      if (Number.isNaN(parsed.getTime())) {
+        errors.push('released_at must be a valid date.');
+      } else {
+        releasedAtIso = parsed.toISOString();
+      }
+    }
+  }
+
+  if (errors.length > 0 || !name || !type || !rarity || !releasedAtIso) {
+    return {
+      error: `Invalid request body: ${errors.join(' ')}`,
+    };
+  }
+
+  const sanitized: Record<string, unknown> = {
+    name,
+    type,
+    rarity,
+    released_at: releasedAtIso,
+  };
+
+  return { data: sanitized };
+};
+
+const handlePostRequest = async (request: Request, env: Env): Promise<Response> => {
+  const token = env.ITEMS_API_TOKEN;
+
+  if (!token) {
+    console.error('ITEMS_API_TOKEN is not configured; refusing POST /api/items request');
+    return jsonError('Authorization is not configured for this endpoint.', 500);
+  }
+
+  const providedToken = extractBearerToken(request.headers.get('Authorization'));
+  if (!providedToken || providedToken !== token) {
+    return jsonError('Unauthorized', 401);
+  }
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch (parseError) {
+    console.warn('Failed to parse POST /api/items payload', parseError);
+    return jsonError('Invalid JSON body', 400);
+  }
+
+  const validationResult = validateNewItemPayload(payload);
+  if ('error' in validationResult) {
+    console.warn('Validation failed for POST /api/items payload', {
+      message: validationResult.error,
+    });
+    return jsonError(validationResult.error, 400);
+  }
+
+  const insertPayload = validationResult.data;
+
+  let supabase;
+  try {
+    supabase = getSupabaseClient(env);
+  } catch (clientError) {
+    console.error(
+      'Failed to initialise Supabase client for create item request',
+      clientError
+    );
+    return jsonError('Could not connect to the data service.', 500);
+  }
+
+  try {
+    const response = await supabase
+      .from('items')
+      .insert([insertPayload])
+      .select('*')
+      .maybeSingle();
+
+    if (response.error) {
+      const { message, details, hint, code } = response.error;
+      console.error('Supabase returned an error when inserting an item', {
+        message,
+        details,
+        hint,
+        code,
+      });
+      return jsonError('Failed to create item in the data service.', 500);
+    }
+
+    const inserted = (Array.isArray(response.data)
+      ? response.data[0]
+      : response.data) as Item | null | undefined;
+
+    if (!inserted) {
+      console.error('Supabase insert returned no data for POST /api/items');
+      return jsonError('Failed to create item in the data service.', 500);
+    }
+
+    return jsonResponse(
+      { item: inserted },
+      { status: 201, headers: { 'Cache-Control': 'no-store' } }
+    );
+  } catch (insertError) {
+    console.error('Unexpected error while inserting item into Supabase', insertError);
+    return jsonError('Failed to create item in the data service.', 500);
+  }
+};
+
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (request.method === 'OPTIONS') {
     return preflightResponse();
+  }
+
+  if (request.method === 'POST') {
+    return handlePostRequest(request, env);
   }
 
   if (request.method !== 'GET') {

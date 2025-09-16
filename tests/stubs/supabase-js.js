@@ -12,6 +12,18 @@ function cloneSteps(steps) {
   return steps.map((step) => step.slice());
 }
 
+function dequeueResponse(cacheKey, table, steps, defaultResponse) {
+  const state = ensureState(cacheKey);
+  const response =
+    state.responseQueue.length > 0
+      ? state.responseQueue.shift()
+      : defaultResponse;
+
+  state.queryLog.push({ table, steps: cloneSteps(steps) });
+
+  return response;
+}
+
 function createQueryBuilder(cacheKey, table) {
   const steps = [];
 
@@ -45,19 +57,24 @@ function createQueryBuilder(cacheKey, table) {
       steps.push(['or', expression]);
       return builder;
     },
+    insert(values, options) {
+      steps.push(['insert', values, options]);
+      return builder;
+    },
     maybeSingle() {
       steps.push(['maybeSingle']);
-      return Promise.resolve({ data: null, error: null });
+      const response = dequeueResponse(cacheKey, table, steps, {
+        data: null,
+        error: null,
+      });
+
+      return Promise.resolve(response);
     },
     then(onFulfilled, onRejected) {
-      const state = ensureState(cacheKey);
-      const response =
-        state.responseQueue.length > 0
-          ? state.responseQueue.shift()
-          : { data: [], error: null };
-
-      state.queryLog.push({ table, steps: cloneSteps(steps) });
-
+      const response = dequeueResponse(cacheKey, table, steps, {
+        data: [],
+        error: null,
+      });
       return Promise.resolve(response).then(onFulfilled, onRejected);
     },
   };

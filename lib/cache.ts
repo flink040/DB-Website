@@ -20,12 +20,14 @@ export interface CachedComputeResult {
 function applyCorsAndCachingHeaders(headers: Headers): Headers {
   headers.set('Content-Type', 'application/json; charset=utf-8');
   headers.set('Access-Control-Allow-Origin', '*');
-  headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   headers.set(
     'Access-Control-Allow-Headers',
     'Content-Type, Authorization, X-Requested-With, apikey'
   );
-  headers.set('Cache-Control', `public, max-age=${BROWSER_CACHE_TTL_SECONDS}`);
+  if (!headers.has('Cache-Control')) {
+    headers.set('Cache-Control', `public, max-age=${BROWSER_CACHE_TTL_SECONDS}`);
+  }
   return headers;
 }
 
