@@ -1,5 +1,7 @@
 import { elements } from './elements.js';
 import { loadItems } from './api.js';
+import { getAccessToken } from './auth.js';
+import { state } from './state.js';
 
 let lastFocusedElement = null;
 let isSubmitting = false;
@@ -153,6 +155,11 @@ export const submitAddItemForm = async () => {
     return;
   }
 
+  if (!state.auth?.profile) {
+    setFormStatus('Bitte melde dich mit Discord an, bevor du Items hinzufügst.', 'error');
+    return;
+  }
+
   let payload;
   try {
     payload = collectFormData();
@@ -165,6 +172,12 @@ export const submitAddItemForm = async () => {
     return;
   }
 
+  const accessToken = getAccessToken();
+  if (!accessToken) {
+    setFormStatus('Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.', 'error');
+    return;
+  }
+
   isSubmitting = true;
   setFormBusy(true);
   setFormStatus('Item wird erstellt…', 'pending');
@@ -173,12 +186,16 @@ export const submitAddItemForm = async () => {
     const response = await fetch('/api/items', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
       },
       body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Bitte melde dich an, um neue Items hinzuzufügen.');
+      }
       let errorMessage = `Item konnte nicht erstellt werden (HTTP ${response.status}).`;
       try {
         const errorBody = await response.json();

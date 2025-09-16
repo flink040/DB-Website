@@ -10,7 +10,8 @@ let envCounter = 0;
 interface TestEnv {
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
-  ITEMS_API_TOKEN: string;
+  ITEMS_CREATED_BY_COLUMN?: string;
+  ITEMS_DISCORD_ID_COLUMN?: string;
   [key: string]: unknown;
 }
 
@@ -19,7 +20,8 @@ const createEnv = (overrides: Partial<TestEnv> = {}) => {
   const env: TestEnv = {
     SUPABASE_URL: `https://stub-${envCounter}.supabase.co`,
     SUPABASE_ANON_KEY: `anon-key-${envCounter}`,
-    ITEMS_API_TOKEN: `token-${envCounter}`,
+    ITEMS_CREATED_BY_COLUMN: 'created_by_user_id',
+    ITEMS_DISCORD_ID_COLUMN: 'created_by_discord_id',
     ...overrides,
   };
   const cacheKey = `${env.SUPABASE_URL}:${env.SUPABASE_ANON_KEY}`;
@@ -29,6 +31,28 @@ const createEnv = (overrides: Partial<TestEnv> = {}) => {
 
 const createRequest = (path: string, init?: any) =>
   new Request(`https://example.com${path}`, init);
+
+const queueAuthSuccess = (
+  cacheKey: string,
+  overrides: { userId?: string; discordId?: string } = {}
+) => {
+  const userId = overrides.userId ?? 'user-123';
+  const discordId = overrides.discordId ?? 'discord-456';
+  supabaseStub.__queueAuthResponse(cacheKey, {
+    data: {
+      user: {
+        id: userId,
+        identities: [
+          {
+            provider: 'discord',
+            identity_data: { id: discordId },
+          },
+        ],
+      },
+    },
+    error: null,
+  });
+};
 
 test('items API returns CORS headers for OPTIONS requests', async () => {
   const { env } = createEnv();
@@ -190,13 +214,15 @@ test('items API rejects POST requests without a valid bearer token', async () =>
 });
 
 test('items API validates POST request payloads', async () => {
-  const { env } = createEnv();
+  const { env, cacheKey } = createEnv();
+  queueAuthSuccess(cacheKey);
 
+  const accessToken = 'valid-access-token';
   const request = createRequest('/api/items', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.ITEMS_API_TOKEN}`,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
       name: '  ',
@@ -210,6 +236,7 @@ test('items API validates POST request payloads', async () => {
 
   assert.equal(response.status, 400);
   assert.match(body.error, /Invalid request body/);
+  assert.equal(supabaseStub.__getLastAuthToken(cacheKey), accessToken);
 });
 
 test('items API inserts new items via POST requests', async () => {
@@ -223,13 +250,16 @@ test('items API inserts new items via POST requests', async () => {
     released_at: '2024-01-01T00:00:00.000Z',
   };
 
+  queueAuthSuccess(cacheKey, { userId: 'user-abc', discordId: 'discord-xyz' });
+
   supabaseStub.__queueResponse(cacheKey, { data: insertedItem });
 
+  const accessToken = 'auth-token';
   const request = createRequest('/api/items', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.ITEMS_API_TOKEN}`,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
       name: '  Test Item  ',
@@ -245,6 +275,7 @@ test('items API inserts new items via POST requests', async () => {
   assert.equal(response.status, 201);
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
   assert.deepEqual(body.item, insertedItem);
+  assert.equal(supabaseStub.__getLastAuthToken(cacheKey), accessToken);
 
   const lastQuery = supabaseStub.__getLastQuery(cacheKey);
   if (!lastQuery) {
@@ -259,6 +290,8 @@ test('items API inserts new items via POST requests', async () => {
       type: 'weapon',
       rarity: 'rare',
       released_at: '2024-01-01T00:00:00.000Z',
+      created_by_user_id: 'user-abc',
+      created_by_discord_id: 'discord-xyz',
     },
   ]);
 

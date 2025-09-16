@@ -5,6 +5,7 @@ import { state } from './state.js';
 import { debounce } from './utils.js';
 import { render, updateStatusMessage } from './render.js';
 import { closeAddItemModal, openAddItemModal, submitAddItemForm } from './create-item.js';
+import { signInWithDiscord, signOut } from './auth.js';
 
 export const initializeEvents = () => {
   if (elements.searchForm) {
@@ -110,5 +111,25 @@ export const initializeEvents = () => {
       }
     });
     view.addEventListener('keydown', handleDetailKeydown);
+  }
+
+  if (elements.authLoginButton) {
+    elements.authLoginButton.addEventListener('click', async () => {
+      try {
+        await signInWithDiscord();
+      } catch (error) {
+        console.error('Discord-Anmeldung fehlgeschlagen', error);
+      }
+    });
+  }
+
+  if (elements.authLogoutButton) {
+    elements.authLogoutButton.addEventListener('click', async () => {
+      try {
+        await signOut();
+      } catch (error) {
+        console.error('Abmeldung fehlgeschlagen', error);
+      }
+    });
   }
 };

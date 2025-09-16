@@ -4,6 +4,117 @@ import { state } from './state.js';
 import { formatLabel, getInitial, getStarLevel, normalizeFilterValue, renderStars } from './utils.js';
 import { openDetail } from './detail.js';
 
+const getAuthMessage = () => {
+  const { auth } = state;
+  if (!auth) return '';
+  if (auth.error) {
+    return auth.error;
+  }
+  switch (auth.status) {
+    case 'loading':
+      return 'Anmeldung wird geladen…';
+    case 'signing-in':
+      return 'Weiterleitung zu Discord…';
+    case 'signing-out':
+      return 'Abmeldung läuft…';
+    default:
+      return '';
+  }
+};
+
+const updateAuthControls = () => {
+  const auth = state.auth ?? {};
+  const profile = auth.profile ?? null;
+  const status = auth.status ?? 'idle';
+  const statusMessage = getAuthMessage();
+
+  const loginButton = elements.authLoginButton;
+  if (loginButton) {
+    const isBusy = status === 'loading' || status === 'signing-in' || status === 'signing-out';
+    const hasProfile = Boolean(profile);
+    loginButton.hidden = hasProfile;
+    loginButton.disabled = isBusy || hasProfile;
+    loginButton.textContent = status === 'signing-in' ? 'Weiterleitung…' : 'Mit Discord anmelden';
+    loginButton.setAttribute('aria-busy', isBusy ? 'true' : 'false');
+  }
+
+  const userWrapper = elements.authUser;
+  const userName = elements.authUserName;
+  const userAvatarWrapper = elements.authUserAvatar;
+  const userAvatarImage = elements.authUserAvatarImage;
+  if (userWrapper) {
+    const hasProfile = Boolean(profile);
+    userWrapper.hidden = !hasProfile;
+    userWrapper.setAttribute('aria-hidden', hasProfile ? 'false' : 'true');
+    if (userName) {
+      userName.textContent = hasProfile ? profile.displayName : '';
+    }
+    if (userAvatarWrapper) {
+      const avatarUrl = hasProfile && profile.avatarUrl ? profile.avatarUrl : '';
+      if (userAvatarImage) {
+        if (avatarUrl) {
+          userAvatarImage.src = avatarUrl;
+          userAvatarImage.alt = `Profilbild von ${profile.displayName}`;
+          userAvatarImage.hidden = false;
+        } else {
+          userAvatarImage.src = '';
+          userAvatarImage.alt = '';
+          userAvatarImage.hidden = true;
+        }
+      }
+      const fallback = userAvatarWrapper.querySelector('.auth-panel__avatar-fallback');
+      if (hasProfile) {
+        const initial = getInitial(profile.displayName);
+        userAvatarWrapper.dataset.initial = initial;
+        if (fallback instanceof HTMLElement) {
+          fallback.textContent = initial;
+        }
+        userAvatarWrapper.hidden = false;
+      } else {
+        delete userAvatarWrapper.dataset.initial;
+        if (fallback instanceof HTMLElement) {
+          fallback.textContent = '';
+        }
+        userAvatarWrapper.hidden = true;
+      }
+    }
+  }
+
+  const logoutButton = elements.authLogoutButton;
+  if (logoutButton) {
+    const isSigningOut = status === 'signing-out';
+    const hasProfile = Boolean(profile);
+    logoutButton.disabled = isSigningOut;
+    logoutButton.hidden = !hasProfile;
+    logoutButton.textContent = isSigningOut ? 'Abmelden…' : 'Abmelden';
+  }
+
+  const statusElement = elements.authStatus;
+  if (statusElement) {
+    if (statusMessage) {
+      statusElement.textContent = statusMessage;
+      statusElement.hidden = false;
+    } else {
+      statusElement.textContent = '';
+      statusElement.hidden = true;
+    }
+  }
+
+  const addItemButton = elements.addItemButton;
+  if (addItemButton) {
+    const canAdd = Boolean(profile);
+    addItemButton.disabled = !canAdd;
+    addItemButton.setAttribute('aria-disabled', canAdd ? 'false' : 'true');
+    if (!canAdd) {
+      addItemButton.title = 'Bitte melde dich mit Discord an, um Items hinzuzufügen.';
+      addItemButton.dataset.authRequired = 'true';
+    } else {
+      addItemButton.title = 'Neues Item hinzufügen';
+      delete addItemButton.dataset.authRequired;
+    }
+  }
+};
+
 export const updateStatusMessage = () => {
   const info = elements.resultInfo;
   if (!info) return;
@@ -170,6 +281,7 @@ export const render = () => {
   renderGrid();
   updateStatusMessage();
   updateLoadMoreButton();
+  updateAuthControls();
 };
 
 export const setLoading = (value) => {

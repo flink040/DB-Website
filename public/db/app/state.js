@@ -17,5 +17,11 @@ export const state = {
   lastSearchToken: 0,
   detailToken: 0,
   activeDetailId: null,
-  lastFocusedElement: null
+  lastFocusedElement: null,
+  auth: {
+    status: 'idle',
+    profile: null,
+    error: '',
+    session: null
+  }
 };
