@@ -1,3 +1,5 @@
+import { getItemTypeLabel } from './item-types.js';
+
 export const debounce = (fn, delay = 300) => {
   let timer = null;
   const debounced = (...args) => {
@@ -10,13 +12,31 @@ export const debounce = (fn, delay = 300) => {
   return debounced;
 };
 
-export const normalizeFilterValue = (value) =>
-  typeof value === 'string' ? value.trim().toLowerCase() : '';
+export const normalizeFilterValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') {
+    return String(value).trim().toLowerCase();
+  }
+  return '';
+};
 
 export const formatLabel = (value) => {
-  const normalized = typeof value === 'string' ? value.trim() : '';
+  const typeLabel = getItemTypeLabel(value);
+  if (typeLabel) return typeLabel;
+
+  let normalized = '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') {
+    normalized = String(value).trim();
+  }
+
   if (!normalized) return 'Unbekannt';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+
+  const cleaned = normalized.replace(/[_-]+/g, ' ');
+  return cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 };
 
 export const getStarLevel = (item) => {
