@@ -5,6 +5,12 @@ import { render } from './render.js';
 let configPromise = null;
 let clientPromise = null;
 
+const noopAuthStorage = {
+  getItem: async () => null,
+  setItem: async () => {},
+  removeItem: async () => {},
+};
+
 const loadConfig = async () => {
   if (!configPromise) {
     configPromise = fetch('/api/auth/config', {
@@ -50,7 +56,12 @@ const loadConfig = async () => {
 const getClient = async () => {
   if (!clientPromise) {
     clientPromise = loadConfig().then(({ supabaseUrl, supabaseAnonKey }) =>
-      createClient(supabaseUrl, supabaseAnonKey)
+      createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          storage: noopAuthStorage,
+        },
+      })
     );
   }
   return clientPromise;
