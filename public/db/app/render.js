@@ -29,21 +29,28 @@ const updateAuthControls = () => {
   const statusMessage = getAuthMessage();
   const hasProfile = Boolean(profile);
   const isBusy = status === 'loading' || status === 'signing-in' || status === 'signing-out';
+  const menuOpen = Boolean(auth.menuOpen);
 
   const authPanel = elements.authPanel;
   if (authPanel) {
     authPanel.dataset.authState = hasProfile ? 'authenticated' : 'anonymous';
+    authPanel.dataset.authMenu = hasProfile && menuOpen && !isBusy ? 'open' : 'closed';
   }
 
   const loginButton = elements.authLoginButton;
   if (loginButton) {
-    loginButton.hidden = hasProfile;
-    loginButton.setAttribute('aria-hidden', hasProfile ? 'true' : 'false');
-    loginButton.disabled = isBusy || hasProfile;
-    loginButton.tabIndex = hasProfile ? -1 : 0;
-    loginButton.setAttribute('aria-busy', isBusy ? 'true' : 'false');
-    const loginLabel = loginButton.querySelector('.auth-panel__login-text');
     const loginText = status === 'signing-in' ? 'Weiterleitung…' : 'Mit Discord anmelden';
+    const disableLogin = status === 'loading' || status === 'signing-in' || status === 'signing-out';
+    loginButton.hidden = false;
+    loginButton.disabled = disableLogin;
+    loginButton.tabIndex = disableLogin ? -1 : 0;
+    loginButton.setAttribute('aria-hidden', 'false');
+    loginButton.setAttribute('aria-busy', disableLogin ? 'true' : 'false');
+    loginButton.setAttribute('aria-expanded', hasProfile && menuOpen && !disableLogin ? 'true' : 'false');
+    loginButton.setAttribute('aria-haspopup', hasProfile ? 'menu' : 'false');
+    loginButton.setAttribute('aria-label', hasProfile ? 'Account-Optionen anzeigen' : loginText);
+    loginButton.title = hasProfile ? 'Account-Optionen anzeigen' : loginText;
+    const loginLabel = loginButton.querySelector('.auth-panel__login-text');
     if (loginLabel) {
       loginLabel.textContent = loginText;
     } else {
@@ -51,61 +58,66 @@ const updateAuthControls = () => {
     }
   }
 
-  const userWrapper = elements.authUser;
+  const authMenu = elements.authMenu;
+  if (authMenu) {
+    const shouldShowMenu = hasProfile && menuOpen && !isBusy;
+    authMenu.hidden = !shouldShowMenu;
+    authMenu.setAttribute('aria-hidden', shouldShowMenu ? 'false' : 'true');
+  }
+
+  const profileButton = elements.authProfileButton;
+  if (profileButton) {
+    const canUseProfile = hasProfile && !isBusy;
+    profileButton.disabled = !canUseProfile;
+    profileButton.setAttribute('aria-disabled', canUseProfile ? 'false' : 'true');
+    profileButton.tabIndex = canUseProfile ? 0 : -1;
+  }
+
   const userName = elements.authUserName;
   const userAvatarWrapper = elements.authUserAvatar;
   const userAvatarImage = elements.authUserAvatarImage;
-  if (userWrapper) {
-    userWrapper.hidden = !hasProfile;
-    userWrapper.setAttribute('aria-hidden', hasProfile ? 'false' : 'true');
-    if (userName) {
-      userName.textContent = hasProfile ? profile.displayName : '';
-    }
-    if (userAvatarWrapper) {
-      const avatarUrl = hasProfile && profile.avatarUrl ? profile.avatarUrl : '';
-      if (userAvatarImage) {
-        if (avatarUrl) {
-          userAvatarImage.src = avatarUrl;
-          userAvatarImage.alt = `Profilbild von ${profile.displayName}`;
-          userAvatarImage.hidden = false;
-        } else {
-          userAvatarImage.src = '';
-          userAvatarImage.alt = '';
-          userAvatarImage.hidden = true;
-        }
-      }
-      const fallback = userAvatarWrapper.querySelector('.auth-panel__avatar-fallback');
-      if (hasProfile) {
-        const initial = getInitial(profile.displayName);
-        userAvatarWrapper.dataset.initial = initial;
-        if (fallback instanceof HTMLElement) {
-          fallback.textContent = initial;
-        }
-        userAvatarWrapper.hidden = false;
+  if (userName) {
+    userName.textContent = hasProfile ? profile.displayName : '';
+  }
+  if (userAvatarWrapper) {
+    const avatarUrl = hasProfile && profile.avatarUrl ? profile.avatarUrl : '';
+    if (userAvatarImage) {
+      if (avatarUrl) {
+        userAvatarImage.src = avatarUrl;
+        userAvatarImage.alt = `Profilbild von ${profile.displayName}`;
+        userAvatarImage.hidden = false;
       } else {
-        delete userAvatarWrapper.dataset.initial;
-        if (fallback instanceof HTMLElement) {
-          fallback.textContent = '';
-        }
-        userAvatarWrapper.hidden = true;
+        userAvatarImage.src = '';
+        userAvatarImage.alt = '';
+        userAvatarImage.hidden = true;
       }
+    }
+    const fallback = userAvatarWrapper.querySelector('.auth-panel__avatar-fallback');
+    if (hasProfile) {
+      const initial = getInitial(profile.displayName);
+      userAvatarWrapper.dataset.initial = initial;
+      if (fallback instanceof HTMLElement) {
+        fallback.textContent = initial;
+      }
+      userAvatarWrapper.hidden = false;
+    } else {
+      delete userAvatarWrapper.dataset.initial;
+      if (fallback instanceof HTMLElement) {
+        fallback.textContent = '';
+      }
+      userAvatarWrapper.hidden = true;
     }
   }
 
   const logoutButton = elements.authLogoutButton;
   if (logoutButton) {
     const isSigningOut = status === 'signing-out';
-    const shouldShow = hasProfile;
-    logoutButton.disabled = isSigningOut || !shouldShow;
-    logoutButton.hidden = !shouldShow;
-    if (shouldShow) {
-      logoutButton.removeAttribute('aria-hidden');
-    } else {
-      logoutButton.setAttribute('aria-hidden', 'true');
-    }
-    logoutButton.tabIndex = shouldShow ? 0 : -1;
+    const isAvailable = hasProfile && !isBusy;
+    logoutButton.disabled = !isAvailable || isSigningOut;
+    logoutButton.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
+    logoutButton.tabIndex = isAvailable ? 0 : -1;
     logoutButton.setAttribute('aria-busy', isSigningOut ? 'true' : 'false');
-    logoutButton.textContent = isSigningOut ? 'Abmelden…' : 'Abmelden';
+    logoutButton.textContent = isSigningOut ? 'Logout…' : 'Logout';
   }
 
   const statusElement = elements.authStatus;
