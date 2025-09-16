@@ -3,8 +3,8 @@ compatibility_date = "2023-12-01"
 pages_build_output_dir = "./public"
 
 [vars]
-PUBLIC_SUPABASE_URL = "https://your-project.supabase.co"
-PUBLIC_SUPABASE_ANON_KEY = "public-anon-key"
+PUBLIC_SUPABASE_URL = "https://taejvzqmlswbgsknthxz.supabase.com"
+PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhZWp2enFtbHN3Ymdza250aHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNTE3NjIsImV4cCI6MjA3MjkyNzc2Mn0.nFWly256mUiFAvAEWdvLA9n_DaNXOnV3MtMLXmHIKGc"
 API_BASE = "https://api.example.com"
 SUPABASE_URL = "{{ secret:SUPABASE_URL }}"
 SUPABASE_ANON_KEY = "{{ secret:SUPABASE_ANON_KEY }}"
@@ -21,5 +21,5 @@ DISCORD_REDIRECT_URI = "{{ secret:DISCORD_REDIRECT_URI }}"
 
 [[kv_namespaces]]
 binding = "ITEM_CACHE"
-id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+id = "97a9d515dca6486f87b2e9f75dfb1a1c"
 preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
