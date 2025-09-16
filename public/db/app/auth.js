@@ -5,6 +5,70 @@ import { render } from './render.js';
 let configPromise = null;
 let clientPromise = null;
 
+const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 Tage
+const LOGGED_IN_COOKIE_NAME = 'db_discord_logged_in';
+const DISCORD_ID_COOKIE_NAME = 'db_discord_id';
+
+const isSecureCookieContext = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  const protocol = window.location?.protocol;
+  return protocol === 'https:';
+};
+
+const writeCookie = (name, value, { maxAge = AUTH_COOKIE_MAX_AGE } = {}) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const safeValue = encodeURIComponent(String(value ?? ''));
+  const parts = [`${name}=${safeValue}`, 'Path=/'];
+
+  if (Number.isFinite(maxAge)) {
+    if (maxAge <= 0) {
+      parts.push('Max-Age=0');
+      parts.push('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+    } else {
+      parts.push(`Max-Age=${Math.round(maxAge)}`);
+    }
+  }
+
+  parts.push('SameSite=Lax');
+
+  if (isSecureCookieContext()) {
+    parts.push('Secure');
+  }
+
+  document.cookie = parts.join('; ');
+};
+
+const clearCookie = (name) => writeCookie(name, '', { maxAge: 0 });
+
+const syncAuthCookies = (session, profile) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  if (session) {
+    writeCookie(LOGGED_IN_COOKIE_NAME, 'true');
+
+    const discordId =
+      typeof profile?.discordId === 'string' && profile.discordId.trim()
+        ? profile.discordId.trim()
+        : null;
+
+    if (discordId) {
+      writeCookie(DISCORD_ID_COOKIE_NAME, discordId);
+    } else {
+      clearCookie(DISCORD_ID_COOKIE_NAME);
+    }
+  } else {
+    clearCookie(LOGGED_IN_COOKIE_NAME);
+    clearCookie(DISCORD_ID_COOKIE_NAME);
+  }
+};
+
 const loadConfig = async () => {
   if (!configPromise) {
     configPromise = fetch('/api/auth/config', {
@@ -114,6 +178,8 @@ const mapUserToProfile = (user) => {
 const applyAuthState = (updates) => {
   const authState = state.auth;
   if (!authState) return;
+  const previousSession = authState.session;
+  const previousProfile = authState.profile;
   if ('status' in updates && updates.status) {
     authState.status = updates.status;
   }
@@ -132,6 +198,14 @@ const applyAuthState = (updates) => {
   if ('menuOpen' in updates) {
     authState.menuOpen = Boolean(updates.menuOpen);
   }
+
+  const sessionChanged = 'session' in updates && authState.session !== previousSession;
+  const profileChanged = 'profile' in updates && authState.profile !== previousProfile;
+
+  if (sessionChanged || profileChanged) {
+    syncAuthCookies(authState.session, authState.profile);
+  }
+
   render();
 };
 
