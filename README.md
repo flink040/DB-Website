@@ -6,8 +6,8 @@ Dieser Leitfaden fasst die notwendigen Schritte zusammen, um das Projekt auf Clo
 
 1. **Repository vorbereiten** – Projekt klonen und die lokalen Abhängigkeiten installieren (z. B. `npm install`, `pnpm install` oder `yarn install`, je nach verwendetem Paketmanager).
 2. **Lokale Variablen setzen** – Die Datei [`.dev.vars`](.dev.vars) mit individuellen Werten befüllen. Wrangler lädt diese Werte automatisch für `wrangler dev`.
-3. **Wrangler-Konfiguration anpassen** – In [`wrangler.toml`](wrangler.toml) die Platzhalter (`PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `API_BASE`, `ITEMS_DISCORD_ID_COLUMN`, `ITEM_CACHE`) durch die realen Projektwerte ersetzen.
-4. **Cloudflare-Secrets speichern** – Hinterlege `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` und bei Bedarf `DISCORD_REDIRECT_URI` per Wrangler, siehe Abschnitt „Secrets in Cloudflare setzen“.
+3. **Wrangler-Konfiguration anpassen** – In [`wrangler.toml`](wrangler.toml) die Platzhalter (`PUBLIC_SUPABASE_URL`, `API_BASE`, `ITEMS_DISCORD_ID_COLUMN`, `ITEM_CACHE`) durch die realen Projektwerte ersetzen. Der `PUBLIC_SUPABASE_ANON_KEY` wird nicht mehr fest in der Datei hinterlegt, sondern zur Buildzeit über eine Umgebungsvariable gesetzt (siehe Schritt 4).
+4. **Cloudflare-Secrets und Environment Variablen speichern** – Hinterlege `PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` und bei Bedarf `DISCORD_REDIRECT_URI` per Wrangler oder in deinem CI/CD-System, siehe Abschnitt „Secrets in Cloudflare setzen“.
 5. **GitHub Actions konfigurieren** – In GitHub die Secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PAGES_PROJECT_NAME` (und optional `CF_PAGES_WORKER_BINDINGS`) hinterlegen. Danach sorgt der Workflow automatisch für Linting/Typechecking bei Pull Requests sowie für Deployments beim Push auf `main`.
 6. **Deployment testen** – Lokal mit `wrangler dev` prüfen und anschließend einen Commit nach `main` pushen. Der GitHub-Workflow übernimmt das Pages-Deployment.
 
@@ -21,7 +21,7 @@ compatibility_date = "2023-12-01"
 
 [vars]
 PUBLIC_SUPABASE_URL = "https://your-supabase-project.supabase.co"
-PUBLIC_SUPABASE_ANON_KEY = "public-anon-key"
+PUBLIC_SUPABASE_ANON_KEY = "{{ env:PUBLIC_SUPABASE_ANON_KEY }}"
 API_BASE = "https://api.example.com"
 ITEMS_DISCORD_ID_COLUMN = "created_by_discord_id"
 
@@ -31,7 +31,7 @@ id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
 ```
 
-- `PUBLIC_*` Variablen stehen im Frontend zur Verfügung.
+- `PUBLIC_*` Variablen stehen im Frontend zur Verfügung. Hinterlege den Wert von `PUBLIC_SUPABASE_ANON_KEY` über eine Umgebungsvariable (z. B. `wrangler secret put PUBLIC_SUPABASE_ANON_KEY` oder einen CI/CD-Secret/Environment-Eintrag).
 - `API_BASE` wird für interne API-Aufrufe genutzt.
 - `ITEMS_DISCORD_ID_COLUMN` legt fest, in welcher Spalte der Tabelle `items` die Discord-ID gespeichert wird (Standard: `created_by_discord_id`).
 - `ITEM_CACHE` bindet das Cloudflare KV-Namespace an das Projekt; `preview_id` ist optional, aber hilfreich für Staging-Deployments.
@@ -57,10 +57,10 @@ Diese Datei dient als Vorlage und kann lokal angepasst werden. Für produktive U
 
 | Variable | Sichtbarkeit | Beschreibung | Beispielwert |
 | --- | --- | --- | --- |
-| `PUBLIC_SUPABASE_URL` | Öffentlich (Frontend) | Supabase-Projekt-URL, die vom Browser genutzt wird. | `https://taejvzqmlswbgsknthxz.supabase.com` |
-| `PUBLIC_SUPABASE_ANON_KEY` | Öffentlich (Frontend) | Öffentlicher Supabase-Anon-Key für Client-Anfragen. | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…` |
-| `SUPABASE_URL` | Secret (Functions) | Interne Supabase-URL für Cloudflare Functions. | `https://taejvzqmlswbgsknthxz.supabase.com` |
-| `SUPABASE_ANON_KEY` | Secret (Functions) | Supabase-Anon-Key für serverseitige Aufrufe. | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…` |
+| `PUBLIC_SUPABASE_URL` | Öffentlich (Frontend) | Supabase-Projekt-URL, die vom Browser genutzt wird. | `https://your-supabase-project.supabase.co` |
+| `PUBLIC_SUPABASE_ANON_KEY` | Öffentlich (Frontend) | Öffentlicher Supabase-Anon-Key für Client-Anfragen. | `public-anon-key` |
+| `SUPABASE_URL` | Secret (Functions) | Interne Supabase-URL für Cloudflare Functions. | `https://your-supabase-project.supabase.co` |
+| `SUPABASE_ANON_KEY` | Secret (Functions) | Supabase-Anon-Key für serverseitige Aufrufe. | `public-anon-key` |
 | `API_BASE` | Öffentlich (Functions) | Basis-URL des Pages-Deployments für API-Aufrufe. | `https://db-website-24f.pages.dev` |
 | `ITEMS_DISCORD_ID_COLUMN` | Öffentlich (Functions) | Name der `items`-Spalte, in der die Discord-ID der Ersteller:innen gespeichert wird. | `created_by_discord_id` |
 | `DISCORD_CLIENT_ID` | Secret (Functions) | Discord-OAuth Client ID (Supabase → Auth → Providers). | `1414567063221178429` |
@@ -90,10 +90,12 @@ Der Workflow liegt unter [`.github/workflows/ci-pages-deploy.yml`](.github/workf
 Mit Wrangler werden Secrets pro Umgebung hinterlegt:
 
 ```bash
+wrangler secret put PUBLIC_SUPABASE_ANON_KEY
+# Eingabe: public-anon-key
 wrangler secret put SUPABASE_URL
-# Eingabe: https://taejvzqmlswbgsknthxz.supabase.com
+# Eingabe: https://your-supabase-project.supabase.co
 wrangler secret put SUPABASE_ANON_KEY
-# Eingabe: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…
+# Eingabe: public-anon-key
 wrangler secret put DISCORD_CLIENT_ID
 # Eingabe: 1414567063221178429
 wrangler secret put DISCORD_CLIENT_SECRET
@@ -103,6 +105,23 @@ wrangler secret put DISCORD_REDIRECT_URI
 ```
 
 Der Befehl fordert interaktiv den jeweiligen Wert an und speichert ihn im Projekt. Wiederhole den Vorgang für alle notwendigen Secrets.
+
+Für CI/CD-Deployments (z. B. GitHub Actions) muss `PUBLIC_SUPABASE_ANON_KEY` außerdem als Environment-Variable exportiert werden, damit `wrangler pages deploy` den Wert zur Buildzeit injizieren kann:
+
+```yaml
+- name: Deploy to Cloudflare Pages
+  env:
+    PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+  run: wrangler pages deploy
+```
+
+Dank des Platzhalters `{{ env:PUBLIC_SUPABASE_ANON_KEY }}` greift Wrangler ausschließlich auf die gesetzte Umgebungsvariable zu. Du kannst das lokal testen, indem du den Wert explizit setzt:
+
+```bash
+PUBLIC_SUPABASE_ANON_KEY=public-anon-key wrangler pages dev
+```
+
+Ohne diese Variable bricht der Build bzw. das Deployment mit einem Hinweis auf den fehlenden Wert ab – so stellst du sicher, dass keine Repository-Werte mehr verwendet werden.
 
 ## Hinweis zum Discord Bot
 
