@@ -15,76 +15,103 @@
   </head>
   <body>
     <header class="page-header">
-      <div class="page-header__inner">
-        <div class="brand">
-          <div class="brand__icon" aria-hidden="true">⚔️</div>
-          <div class="brand__text">
-            <p class="brand__eyebrow">OP Item Datenbank</p>
-            <h1 class="brand__title">Finde dein neues Item</h1>
-            <p class="brand__lead">
-              Durchsuche die Datenbank, filtere nach Typ und Seltenheit und entdecke dein neues Lieblingsitem.
-            </p>
-          </div>
-        </div>
-        <form id="searchForm" class="search" role="search" autocomplete="off">
-          <label class="sr-only" for="searchInput">Items durchsuchen</label>
-          <input
-            id="searchInput"
-            class="search__input"
-            type="search"
-            name="q"
-            placeholder="Nach Items suchen…"
-            aria-label="Items durchsuchen"
-            autocomplete="off"
-          />
-        </form>
-
-        <div id="authPanel" class="auth-panel" data-auth-state="anonymous" data-auth-menu="closed">
-          <p class="auth-panel__label">Login Bereich</p>
-          <button
-            id="authLoginButton"
-            class="auth-panel__action auth-panel__login"
-            type="button"
-            aria-haspopup="true"
-            aria-expanded="false"
-            aria-controls="authMenu"
-          >
-            <span class="auth-panel__login-icon" aria-hidden="true"></span>
-            <span class="auth-panel__login-text">Mit Discord anmelden</span>
-          </button>
-          <div
-            id="authMenu"
-            class="auth-panel__menu"
-            role="menu"
-            aria-labelledby="authLoginButton"
-            hidden
-          >
-            <button
-              id="authProfileButton"
-              class="auth-panel__menu-item auth-panel__menu-item--profile"
-              type="button"
-              role="menuitem"
-            >
-              <span class="auth-panel__avatar" id="authUserAvatar">
-                <img id="authUserAvatarImage" alt="" hidden />
-                <span class="auth-panel__avatar-fallback" aria-hidden="true"></span>
+      <div class="page-header__wrapper">
+        <div class="hero-card">
+          <div class="hero-card__content">
+            <div class="brand">
+              <div class="brand__icon" aria-hidden="true">⚔️</div>
+              <div class="brand__text">
+                <p class="brand__eyebrow">OP Item Datenbank</p>
+                <h1 class="brand__title">Finde dein neues Item</h1>
+                <p class="brand__lead">
+                  Durchsuche die Datenbank, filtere nach Typ und Seltenheit und entdecke dein neues Lieblingsitem.
+                </p>
+              </div>
+            </div>
+            <form id="searchForm" class="search" role="search" autocomplete="off">
+              <label class="sr-only" for="searchInput">Items durchsuchen</label>
+              <span class="search__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle
+                    cx="11"
+                    cy="11"
+                    r="6.25"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="m20 20-3.75-3.75"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
               </span>
-              <span class="auth-panel__menu-copy">
-                <span class="auth-panel__menu-title">Profil</span>
-                <span id="authUserName" class="auth-panel__menu-subtitle"></span>
-              </span>
-              <span class="auth-panel__menu-chevron" aria-hidden="true"></span>
-            </button>
-            <button
-              id="authLogoutButton"
-              class="auth-panel__menu-item auth-panel__menu-item--logout"
-              type="button"
-              role="menuitem"
-            >
-              Logout
-            </button>
+              <input
+                id="searchInput"
+                class="search__input"
+                type="search"
+                name="q"
+                placeholder="Nach Items suchen…"
+                aria-label="Items durchsuchen"
+                autocomplete="off"
+              />
+            </form>
           </div>
-          <p id="authStatus" class="auth-panel__status" aria-live="polite" hidden></p>
+          <div class="hero-card__aside">
+            <div id="authPanel" class="auth-panel" data-auth-state="anonymous" data-auth-menu="closed">
+              <p class="auth-panel__label">Login Bereich</p>
+              <button
+                id="authLoginButton"
+                class="auth-panel__action auth-panel__login"
+                type="button"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="authMenu"
+              >
+                <span class="auth-panel__login-icon" aria-hidden="true"></span>
+                <span class="auth-panel__login-text">Mit Discord anmelden</span>
+              </button>
+              <div
+                id="authMenu"
+                class="auth-panel__menu"
+                role="menu"
+                aria-labelledby="authLoginButton"
+                hidden
+              >
+                <button
+                  id="authProfileButton"
+                  class="auth-panel__menu-item auth-panel__menu-item--profile"
+                  type="button"
+                  role="menuitem"
+                >
+                  <span class="auth-panel__avatar" id="authUserAvatar">
+                    <img id="authUserAvatarImage" alt="" hidden />
+                    <span class="auth-panel__avatar-fallback" aria-hidden="true"></span>
+                  </span>
+                  <span class="auth-panel__menu-copy">
+                    <span class="auth-panel__menu-title">Profil</span>
+                    <span id="authUserName" class="auth-panel__menu-subtitle"></span>
+                  </span>
+                  <span class="auth-panel__menu-chevron" aria-hidden="true"></span>
+                </button>
+                <button
+                  id="authLogoutButton"
+                  class="auth-panel__menu-item auth-panel__menu-item--logout"
+                  type="button"
+                  role="menuitem"
+                >
+                  Logout
+                </button>
+              </div>
+              <p id="authStatus" class="auth-panel__status" aria-live="polite" hidden></p>
+            </div>
+          </div>
         </div>
       </div>
     </header>
@@ -128,11 +155,31 @@
               <option value="mega-jackpot">Mega Jackpot</option>
             </select>
           </label>
+          <label class="filter">
+            <span class="filter__label">Sternlevel</span>
+            <select id="starsFilter" name="stars" data-enhance-select>
+              <option value="">Alle Sterne</option>
+              <option value="0">0 Sterne</option>
+              <option value="1">1 Stern</option>
+              <option value="2">2 Sterne</option>
+              <option value="3">3 Sterne</option>
+            </select>
+          </label>
         </form>
-        <p id="resultInfo" class="toolbar__info" aria-live="polite"></p>
+      </section>
+
+      <section
+        id="recentSearchSection"
+        class="recent-searches"
+        aria-label="Letzte Suchanfragen"
+        hidden
+      >
+        <p class="recent-searches__title">Recent Searches</p>
+        <div id="recentSearches" class="recent-searches__list" role="list"></div>
       </section>
 
       <section class="results" aria-label="Suchergebnisse">
+        <p id="resultInfo" class="toolbar__info" aria-live="polite"></p>
         <div id="cardGrid" class="card-grid" role="list"></div>
         <button id="loadMoreButton" class="load-more" type="button">Mehr laden</button>
         <button id="addItemButton" class="add-item-button" type="button">Item hinzufügen</button>

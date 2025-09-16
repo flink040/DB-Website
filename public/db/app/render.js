@@ -203,6 +203,42 @@ export const updateLoadMoreButton = () => {
   button.textContent = state.loading ? 'Lädt…' : 'Mehr laden';
 };
 
+const renderRecentSearches = () => {
+  const section = elements.recentSearchSection;
+  const list = elements.recentSearchList;
+  if (!section || !list) return;
+
+  const items = Array.isArray(state.recentSearches) ? state.recentSearches : [];
+  list.innerHTML = '';
+
+  const fragment = document.createDocumentFragment();
+  let appended = false;
+  items.forEach((entry) => {
+    if (typeof entry !== 'string') return;
+    const query = entry.trim();
+    if (!query) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'recent-search';
+    button.dataset.recentSearch = query;
+    button.textContent = query;
+    button.setAttribute('aria-label', `Nach „${query}“ suchen`);
+    button.title = `Nach „${query}“ suchen`;
+    fragment.appendChild(button);
+    appended = true;
+  });
+
+  if (!appended) {
+    section.hidden = true;
+    section.setAttribute('aria-hidden', 'true');
+    return;
+  }
+
+  section.hidden = false;
+  section.setAttribute('aria-hidden', 'false');
+  list.appendChild(fragment);
+};
+
 const createCard = (item) => {
   const id = item?.id;
   const wrapper = document.createElement('div');
@@ -313,6 +349,7 @@ const renderGrid = () => {
 };
 
 export const render = () => {
+  renderRecentSearches();
   renderGrid();
   updateStatusMessage();
   updateLoadMoreButton();
