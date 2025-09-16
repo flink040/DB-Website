@@ -16,6 +16,15 @@ type Env = SupabaseEnv & CacheEnv;
 const escapeForILike = (value: string): string =>
   value.replace(/[%_]/g, (match) => `\\${match}`);
 
+interface Item {
+  id: string;
+  name: string;
+  type: string;
+  rarity: string;
+  released_at: string;
+  [key: string]: unknown;
+}
+
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (request.method === 'OPTIONS') {
     return preflightResponse();
@@ -41,7 +50,31 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const rarityFilter = url.searchParams.get('rarity')?.trim() || null;
 
   return withCache(request, env, async () => {
-    const supabase = getSupabaseClient(env);
+    let supabase;
+    try {
+      supabase = getSupabaseClient(env);
+    } catch (clientError) {
+      console.error(
+        'Failed to initialise Supabase client for search request',
+        clientError
+      );
+      return {
+        data: { error: 'Could not connect to the data service.' },
+        status: 500,
+        skipCache: true,
+      };
+    }
+
+    const filters = {
+      type: typeFilter,
+      rarity: rarityFilter,
+    };
+
+    console.debug('Processing search request', {
+      query: q,
+      limit,
+      filters,
+    });
 
     let query = supabase
       .from('items')
@@ -58,29 +91,60 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       query = query.eq('rarity', rarityFilter);
     }
 
-    const { data, error } = await query;
+    try {
+      const response = await query;
+      const data = response.data as Item[] | null | undefined;
 
-    if (error) {
+      if (response.error) {
+        const { message, details, hint, code } = response.error;
+        console.error('Supabase returned an error when searching items', {
+          message,
+          details,
+          hint,
+          code,
+          query: q,
+          limit,
+          filters,
+        });
+        return {
+          data: {
+            error: 'Failed to retrieve search results from the data service.',
+          },
+          status: 500,
+          skipCache: true,
+        };
+      }
+
+      const items: Item[] = data ?? [];
+
+      console.debug('Search request succeeded', {
+        query: q,
+        limit,
+        returned: items.length,
+        filters,
+      });
+
       return {
-        data: { error: error.message },
+        data: {
+          query: q,
+          limit,
+          filters,
+          items,
+          count: items.length,
+        },
+      };
+    } catch (queryError) {
+      console.error(
+        'Unexpected error while executing Supabase search query',
+        queryError
+      );
+      return {
+        data: {
+          error: 'Failed to retrieve search results from the data service.',
+        },
         status: 500,
         skipCache: true,
       };
     }
-
-    const items = data ?? [];
-
-    return {
-      data: {
-        query: q,
-        limit,
-        filters: {
-          type: typeFilter,
-          rarity: rarityFilter,
-        },
-        items,
-        count: items.length,
-      },
-    };
   });
 };
