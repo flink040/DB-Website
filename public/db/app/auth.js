@@ -10,15 +10,70 @@ const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 Tage
 const LOGGED_IN_COOKIE_NAME = 'db_discord_logged_in';
 const DISCORD_ID_COOKIE_NAME = 'db_discord_id';
 
-const AUTH_HASH_SENSITIVE_KEYS = [
-  'access_token',
-  'refresh_token',
-  'provider_token',
-  'provider_refresh_token',
-  'expires_at',
-  'expires_in',
-  'token_type',
-];
+const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const getTrimmedString = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const extractDiscordIdFromUser = (user) => {
+  if (!isObject(user)) {
+    return null;
+  }
+
+  const identities = Array.isArray(user.identities) ? user.identities : [];
+  for (const identity of identities) {
+    if (!isObject(identity)) {
+      continue;
+    }
+    if (identity.provider !== 'discord') {
+      continue;
+    }
+
+    const identityData = identity.identity_data;
+    if (isObject(identityData)) {
+      const candidate =
+        getTrimmedString(identityData.id) ||
+        getTrimmedString(identityData.user_id) ||
+        getTrimmedString(identityData.sub) ||
+        getTrimmedString(identityData.provider_id);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  const metadata = isObject(user.user_metadata) ? user.user_metadata : null;
+  const rawCustomClaims = metadata?.custom_claims;
+  const customClaims = isObject(rawCustomClaims) ? rawCustomClaims : null;
+  const appMetadata = isObject(user.app_metadata) ? user.app_metadata : null;
+
+  return (
+    getTrimmedString(metadata?.discord_id) ||
+    getTrimmedString(metadata?.provider_id) ||
+    getTrimmedString(metadata?.sub) ||
+    getTrimmedString(customClaims?.discord_id) ||
+    getTrimmedString(customClaims?.provider_id) ||
+    getTrimmedString(customClaims?.sub) ||
+    getTrimmedString(appMetadata?.provider_id) ||
+    null
+  );
+};
+
+const deriveDiscordId = (session, profile) => {
+  const profileDiscordId = getTrimmedString(profile?.discordId);
+  if (profileDiscordId) {
+    return profileDiscordId;
+  }
+
+  const user = session?.user ?? null;
+  return extractDiscordIdFromUser(user);
+};
 
 const isSecureCookieContext = () => {
   if (typeof window === 'undefined') {
@@ -64,10 +119,7 @@ const syncAuthCookies = (session, profile) => {
   if (session) {
     writeCookie(LOGGED_IN_COOKIE_NAME, 'true');
 
-    const discordId =
-      typeof profile?.discordId === 'string' && profile.discordId.trim()
-        ? profile.discordId.trim()
-        : null;
+    const discordId = deriveDiscordId(session, profile);
 
     if (discordId) {
       writeCookie(DISCORD_ID_COOKIE_NAME, discordId);
@@ -167,17 +219,7 @@ const mapUserToProfile = (user) => {
     typeof metadata.avatar_url === 'string' && metadata.avatar_url.trim()
       ? metadata.avatar_url.trim()
       : null;
-  let discordId = null;
-  const identities = Array.isArray(user.identities) ? user.identities : [];
-  for (const identity of identities) {
-    if (identity?.provider === 'discord') {
-      const candidate = identity?.identity_data?.id;
-      if (typeof candidate === 'string' && candidate.trim()) {
-        discordId = candidate.trim();
-      }
-      break;
-    }
-  }
+  const discordId = extractDiscordIdFromUser(user);
   return {
     id,
     displayName,
@@ -278,11 +320,7 @@ const syncProfileWithServer = async (session, profile) => {
     return;
   }
 
-  let discordId = null;
-  const candidateDiscordId = profile?.discordId;
-  if (typeof candidateDiscordId === 'string' && candidateDiscordId.trim()) {
-    discordId = candidateDiscordId.trim();
-  }
+  const discordId = deriveDiscordId(session, profile);
 
   try {
     const response = await fetch('/api/users', {
