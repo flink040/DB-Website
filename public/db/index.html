@@ -39,7 +39,7 @@
         <form id="filterForm" class="filters" autocomplete="off">
           <label class="filter">
             <span class="filter__label">Item-Typ</span>
-            <select id="typeFilter" name="type">
+            <select id="typeFilter" name="type" data-enhance-select>
               <option value="">Alle Typen</option>
               <option value="helm">Helm</option>
               <option value="brustplatte">Brustplatte</option>
@@ -63,7 +63,7 @@
           </label>
           <label class="filter">
             <span class="filter__label">Seltenheit</span>
-            <select id="rarityFilter" name="rarity">
+            <select id="rarityFilter" name="rarity" data-enhance-select>
               <option value="">Alle Seltenheiten</option>
               <option value="common">Common</option>
               <option value="uncommon">Uncommon</option>
@@ -113,7 +113,7 @@
           </div>
           <div class="modal__field">
             <label for="addItemType">Typ</label>
-            <select id="addItemType" name="type" required>
+            <select id="addItemType" name="type" required data-enhance-select>
               <option value="">Bitte auswählen</option>
               <option value="helm">Helm</option>
               <option value="brustplatte">Brustplatte</option>
@@ -137,7 +137,7 @@
           </div>
           <div class="modal__field">
             <label for="addItemRarity">Seltenheit</label>
-            <select id="addItemRarity" name="rarity" required>
+            <select id="addItemRarity" name="rarity" required data-enhance-select>
               <option value="">Bitte auswählen</option>
               <option value="common">Common</option>
               <option value="uncommon">Uncommon</option>
