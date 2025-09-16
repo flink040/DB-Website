@@ -125,6 +125,57 @@ const applyAuthState = (updates) => {
   render();
 };
 
+const syncProfileWithServer = async (session, profile) => {
+  const accessToken =
+    typeof session?.access_token === 'string' && session.access_token.trim()
+      ? session.access_token.trim()
+      : '';
+  const userId =
+    session?.user && typeof session.user.id === 'string' && session.user.id.trim()
+      ? session.user.id.trim()
+      : '';
+
+  if (!accessToken || !userId) {
+    return;
+  }
+
+  let discordId = null;
+  const candidateDiscordId = profile?.discordId;
+  if (typeof candidateDiscordId === 'string' && candidateDiscordId.trim()) {
+    discordId = candidateDiscordId.trim();
+  }
+
+  try {
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ userId, discordId }),
+    });
+
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+      try {
+        const errorBody = await response.json();
+        if (errorBody && typeof errorBody.error === 'string' && errorBody.error.trim()) {
+          message = errorBody.error.trim();
+        }
+      } catch (parseError) {
+        console.warn('Antwort der Profil-Synchronisierung konnte nicht gelesen werden.', parseError);
+      }
+      console.warn('Profil konnte nicht mit dem Backend synchronisiert werden.', {
+        status: response.status,
+        message,
+      });
+    }
+  } catch (error) {
+    console.error('Profil konnte nicht mit dem Backend synchronisiert werden.', error);
+  }
+};
+
 export const initializeAuth = async () => {
   applyAuthState({ status: 'loading', error: '', session: null, profile: null });
   let pendingAuthError = '';
@@ -206,7 +257,13 @@ export const initializeAuth = async () => {
         session: nextSession ?? null,
         error: nextError,
       });
+      if (nextSession) {
+        void syncProfileWithServer(nextSession, nextProfile);
+      }
     });
+    if (session) {
+      await syncProfileWithServer(session, profile);
+    }
   } catch (error) {
     const message =
       error instanceof Error && error.message
