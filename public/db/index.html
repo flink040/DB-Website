@@ -31,7 +31,8 @@
             autocomplete="off"
           />
         </form>
-        <div id="authPanel" class="auth-panel">
+
+        <div id="authPanel" class="auth-panel" data-auth-state="anonymous">
           <p class="auth-panel__label">Login Bereich</p>
           <div id="authUser" class="auth-panel__user" hidden aria-hidden="true">
             <div class="auth-panel__avatar" id="authUserAvatar">
@@ -45,6 +46,7 @@
                 class="auth-panel__action auth-panel__logout"
                 type="button"
                 hidden
+                aria-hidden="true"
               >
                 Abmelden
               </button>

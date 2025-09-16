@@ -4,6 +4,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: dark;
   --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
