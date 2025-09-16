@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export interface SupabaseEnv {
   SUPABASE_URL: string;
