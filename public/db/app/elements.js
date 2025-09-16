@@ -12,7 +12,6 @@ export const elements = {
   addItemName: document.getElementById('addItemName'),
   addItemType: document.getElementById('addItemType'),
   addItemRarity: document.getElementById('addItemRarity'),
-  addItemReleasedAt: document.getElementById('addItemReleasedAt'),
   addItemStars: document.getElementById('addItemStars'),
   addItemImageUrl: document.getElementById('addItemImageUrl'),
   addItemDescription: document.getElementById('addItemDescription'),
