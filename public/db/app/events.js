@@ -4,6 +4,7 @@ import { closeDetail, handleDetailKeydown } from './detail.js';
 import { state } from './state.js';
 import { debounce } from './utils.js';
 import { render, updateStatusMessage } from './render.js';
+import { closeAddItemModal, openAddItemModal, submitAddItemForm } from './create-item.js';
 
 export const initializeEvents = () => {
   if (elements.searchForm) {
@@ -62,6 +63,39 @@ export const initializeEvents = () => {
         triggerSearch(false);
       } else {
         loadItems({ reset: false });
+      }
+    });
+  }
+
+  if (elements.addItemButton) {
+    elements.addItemButton.addEventListener('click', () => {
+      openAddItemModal();
+    });
+  }
+
+  if (elements.addItemForm) {
+    elements.addItemForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await submitAddItemForm();
+    });
+  }
+
+  if (elements.addItemModal) {
+    elements.addItemModal.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (
+        target.matches('[data-close-add-item]') ||
+        target.closest('[data-close-add-item]')
+      ) {
+        closeAddItemModal();
+      }
+    });
+
+    elements.addItemModal.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeAddItemModal();
       }
     });
   }

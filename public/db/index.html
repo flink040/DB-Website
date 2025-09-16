@@ -80,8 +80,104 @@
       <section class="results" aria-label="Suchergebnisse">
         <div id="cardGrid" class="card-grid" role="list"></div>
         <button id="loadMoreButton" class="load-more" type="button">Mehr laden</button>
+        <button id="addItemButton" class="add-item-button" type="button">Item hinzufügen</button>
       </section>
     </main>
+
+    <div
+      id="addItemModal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="addItemModalTitle"
+      aria-hidden="true"
+      hidden
+      tabindex="-1"
+    >
+      <div class="modal__backdrop" data-close-add-item></div>
+      <div class="modal__dialog" role="document">
+        <button
+          id="addItemCloseButton"
+          class="modal__close"
+          type="button"
+          aria-label="Dialog schließen"
+          data-close-add-item
+        >
+          &times;
+        </button>
+        <h2 id="addItemModalTitle" class="modal__title">Neues Item hinzufügen</h2>
+        <form id="addItemForm" class="modal__form" autocomplete="off">
+          <div class="modal__field">
+            <label for="addItemName">Name</label>
+            <input id="addItemName" name="name" type="text" required />
+          </div>
+          <div class="modal__field">
+            <label for="addItemType">Typ</label>
+            <select id="addItemType" name="type" required>
+              <option value="">Bitte auswählen</option>
+              <option value="helm">Helm</option>
+              <option value="brustplatte">Brustplatte</option>
+              <option value="hose">Hose</option>
+              <option value="schuhe">Schuhe</option>
+              <option value="schwert">Schwert</option>
+              <option value="axt">Axt</option>
+              <option value="streitkolben">Streitkolben</option>
+              <option value="dreizack">Dreizack</option>
+              <option value="bogen">Bogen</option>
+              <option value="armbrust">Armbrust</option>
+              <option value="schild">Schild</option>
+              <option value="elytra">Elytra</option>
+              <option value="schildkroetenpanzer">Schildkrötenpanzer</option>
+              <option value="golden-horse-armor">Golden Horse Armor</option>
+              <option value="spitzhacke">Spitzhacke</option>
+              <option value="hacke">Hacke</option>
+              <option value="schaufel">Schaufel</option>
+              <option value="angel">Angel</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label for="addItemRarity">Seltenheit</label>
+            <select id="addItemRarity" name="rarity" required>
+              <option value="">Bitte auswählen</option>
+              <option value="common">Common</option>
+              <option value="uncommon">Uncommon</option>
+              <option value="rare">Rare</option>
+              <option value="epic">Epic</option>
+              <option value="legendary">Legendary</option>
+              <option value="mythic">Mythic</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label for="addItemReleasedAt">Veröffentlicht am</label>
+            <input id="addItemReleasedAt" name="released_at" type="datetime-local" required />
+          </div>
+          <div class="modal__field">
+            <label for="addItemStars">Sterne (optional)</label>
+            <input id="addItemStars" name="stars" type="number" min="0" step="1" />
+          </div>
+          <div class="modal__field">
+            <label for="addItemImageUrl">Bild-URL (optional)</label>
+            <input id="addItemImageUrl" name="image_url" type="url" />
+          </div>
+          <div class="modal__field">
+            <label for="addItemDescription">Beschreibung (optional)</label>
+            <textarea id="addItemDescription" name="description" rows="4"></textarea>
+          </div>
+          <p id="addItemFormStatus" class="modal__status" role="status" aria-live="polite"></p>
+          <div class="modal__actions">
+            <button id="addItemSubmitButton" class="modal__submit" type="submit">Speichern</button>
+            <button
+              id="addItemCancelButton"
+              class="modal__cancel"
+              type="button"
+              data-close-add-item
+            >
+              Abbrechen
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <aside id="detailView" class="detail-view" aria-hidden="true" hidden>
       <div class="detail-view__backdrop" data-close-detail></div>
