@@ -27,6 +27,51 @@ type Env = SupabaseEnv & CacheEnv & ItemsApiEnv;
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
+const SUPABASE_CREDENTIALS_ERROR = 'Supabase credentials missing';
+
+const readSupabaseCredential = (
+  env: Env,
+  key: 'SUPABASE_URL' | 'SUPABASE_ANON_KEY'
+): string | null => {
+  const valueFromEnv = env?.[key];
+  if (typeof valueFromEnv === 'string') {
+    const trimmed = valueFromEnv.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  const valueFromProcess =
+    typeof process !== 'undefined' ? process.env?.[key] : undefined;
+  if (typeof valueFromProcess === 'string') {
+    const trimmed = valueFromProcess.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  return null;
+};
+
+const ensureSupabaseCredentials = (env: Env): string | null => {
+  const url = readSupabaseCredential(env, 'SUPABASE_URL');
+  const anonKey = readSupabaseCredential(env, 'SUPABASE_ANON_KEY');
+
+  if (!url || !anonKey) {
+    return SUPABASE_CREDENTIALS_ERROR;
+  }
+
+  return null;
+};
+
+const sanitizeSupabaseErrorMessage = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const sanitized = value.replace(/\s+/g, ' ').trim();
+  return sanitized || null;
+};
 
 interface Cursor {
   releasedAt?: string;
@@ -165,6 +210,11 @@ const handlePostRequest = async (request: Request, env: Env): Promise<Response> 
     return jsonError('Unauthorized', 401);
   }
 
+  const credentialsError = ensureSupabaseCredentials(env);
+  if (credentialsError) {
+    return jsonError(credentialsError, 500);
+  }
+
   let authSupabase;
   try {
     authSupabase = getSupabaseClient(env);
@@ -276,7 +326,14 @@ const handlePostRequest = async (request: Request, env: Env): Promise<Response> 
         hint,
         code,
       });
-      return jsonError('Failed to create item in the data service.', 500);
+      const cause = sanitizeSupabaseErrorMessage(message);
+      const body: Record<string, string> = {
+        error: 'Failed to create item in the data service.',
+      };
+      if (cause) {
+        body.cause = cause;
+      }
+      return jsonResponse(body, { status: 500 });
     }
 
     const inserted = (Array.isArray(response.data)
@@ -325,6 +382,15 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       cursor,
     });
 
+    const credentialsError = ensureSupabaseCredentials(env);
+    if (credentialsError) {
+      return {
+        data: { error: credentialsError },
+        status: 500,
+        skipCache: true,
+      };
+    }
+
     let supabase;
     try {
       supabase = getSupabaseClient(env);
@@ -368,8 +434,12 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
           limit,
           cursor,
         });
+        const cause = sanitizeSupabaseErrorMessage(message);
         return {
-          data: { error: 'Failed to retrieve items from the data service.' },
+          data: {
+            error: 'Failed to retrieve items from the data service.',
+            ...(cause ? { cause } : null),
+          },
           status: 500,
           skipCache: true,
         };

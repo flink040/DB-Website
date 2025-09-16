@@ -150,6 +150,20 @@ test('items API ignores cursor values containing only whitespace', async () => {
   assert.equal(hasCursorFilter, false);
 });
 
+test('items API returns an error when Supabase credentials are missing for GET requests', async () => {
+  const { env } = createEnv({
+    SUPABASE_URL: '   ',
+    SUPABASE_ANON_KEY: '   ',
+  });
+
+  const request = createRequest('/api/items');
+  const response = await onRequest({ request, env } as any);
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(body, { error: 'Supabase credentials missing' });
+});
+
 test('items API returns items and a next cursor from Supabase results', async () => {
   const { env, cacheKey } = createEnv();
 
@@ -192,6 +206,23 @@ test('items API returns items and a next cursor from Supabase results', async ()
   assert.equal(body.nextCursor, '2023-03-08T00:00:00.000Z|item-1');
 });
 
+test('items API includes Supabase error messages in GET responses', async () => {
+  const { env, cacheKey } = createEnv();
+
+  supabaseStub.__queueResponse(cacheKey, {
+    data: [],
+    error: { message: '  row level security prevented\naccess  ' },
+  });
+
+  const request = createRequest('/api/items');
+  const response = await onRequest({ request, env } as any);
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(body.error, 'Failed to retrieve items from the data service.');
+  assert.equal(body.cause, 'row level security prevented access');
+});
+
 test('items API rejects POST requests without a valid bearer token', async () => {
   const { env } = createEnv();
 
@@ -213,6 +244,30 @@ test('items API rejects POST requests without a valid bearer token', async () =>
 
   assert.equal(response.status, 401);
   assert.equal(body.error, 'Unauthorized');
+});
+
+test('items API returns an error when Supabase credentials are missing for POST requests', async () => {
+  const { env } = createEnv({ SUPABASE_ANON_KEY: '  ' });
+
+  const request = createRequest('/api/items', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer valid-token',
+    },
+    body: JSON.stringify({
+      name: 'Item',
+      type: 'weapon',
+      rarity: 'jackpot',
+      released_at: '2024-01-01T00:00:00Z',
+    }),
+  });
+
+  const response = await onRequest({ request, env } as any);
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(body.error, 'Supabase credentials missing');
 });
 
 test('items API validates POST request payloads', async () => {
@@ -300,4 +355,38 @@ test('items API inserts new items via POST requests', async () => {
 
   const maybeSingleStep = lastQuery.steps[lastQuery.steps.length - 1];
   assert.deepEqual(maybeSingleStep, ['maybeSingle']);
+});
+
+test('items API includes Supabase error messages in POST responses', async () => {
+  const { env, cacheKey } = createEnv();
+
+  queueAuthSuccess(cacheKey, { userId: 'user-123', discordId: 'discord-456' });
+
+  supabaseStub.__queueResponse(cacheKey, {
+    data: null,
+    error: { message: '  duplicate key\nvalue violates constraint  ' },
+  });
+
+  const accessToken = 'valid-token';
+  const request = createRequest('/api/items', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      name: 'Test Item',
+      type: 'weapon',
+      rarity: 'jackpot',
+      released_at: '2024-01-01T00:00:00Z',
+    }),
+  });
+
+  const response = await onRequest({ request, env } as any);
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(body.error, 'Failed to create item in the data service.');
+  assert.equal(body.cause, 'duplicate key value violates constraint');
+  assert.equal(supabaseStub.__getLastAuthToken(cacheKey), accessToken);
 });
