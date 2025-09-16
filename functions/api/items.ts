@@ -73,6 +73,94 @@ const sanitizeSupabaseErrorMessage = (value: unknown): string | null => {
   return sanitized || null;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const getTrimmedString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const extractDiscordIdFromIdentity = (identity: unknown): string | null => {
+  if (!isRecord(identity)) {
+    return null;
+  }
+
+  const provider = identity['provider'];
+  if (typeof provider !== 'string' || provider !== 'discord') {
+    return null;
+  }
+
+  const identityData = identity['identity_data'];
+  if (!isRecord(identityData)) {
+    return null;
+  }
+
+  const candidates = [
+    identityData['id'],
+    identityData['user_id'],
+    identityData['sub'],
+    identityData['provider_id'],
+  ];
+
+  for (const candidate of candidates) {
+    const trimmed = getTrimmedString(candidate);
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  return null;
+};
+
+const extractDiscordIdFromUser = (user: unknown): string | null => {
+  if (!isRecord(user)) {
+    return null;
+  }
+
+  const identities = Array.isArray(user['identities']) ? user['identities'] : [];
+  for (const identity of identities) {
+    const candidate = extractDiscordIdFromIdentity(identity);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const userMetadata = isRecord(user['user_metadata'])
+    ? (user['user_metadata'] as Record<string, unknown>)
+    : null;
+  const customClaims =
+    userMetadata && isRecord(userMetadata['custom_claims'])
+      ? (userMetadata['custom_claims'] as Record<string, unknown>)
+      : null;
+  const appMetadata = isRecord(user['app_metadata'])
+    ? (user['app_metadata'] as Record<string, unknown>)
+    : null;
+
+  const fallbackCandidates = [
+    userMetadata?.['discord_id'],
+    userMetadata?.['provider_id'],
+    userMetadata?.['sub'],
+    customClaims?.['discord_id'],
+    customClaims?.['provider_id'],
+    customClaims?.['sub'],
+    appMetadata?.['provider_id'],
+  ];
+
+  for (const candidate of fallbackCandidates) {
+    const trimmed = getTrimmedString(candidate);
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  return null;
+};
+
 interface Cursor {
   releasedAt?: string;
   id?: string;
@@ -236,28 +324,16 @@ const handlePostRequest = async (request: Request, env: Env): Promise<Response> 
       return jsonError('Unauthorized', 401);
     }
 
-    const user = authData?.user ?? null;
-    if (!user?.id) {
+    const user = authData?.user as Record<string, unknown> | null | undefined;
+    const rawUserId = typeof user?.id === 'string' ? user.id.trim() : '';
+
+    if (!rawUserId) {
       console.warn('Supabase auth returned no user for provided access token');
       return jsonError('Unauthorized', 401);
     }
 
-    supabaseUserId = user.id;
-
-    const identities = Array.isArray(user.identities) ? user.identities : [];
-    for (const identity of identities) {
-      if (identity?.provider === 'discord') {
-        const identityData = identity?.identity_data;
-        const id =
-          typeof identityData?.id === 'string' && identityData.id.trim()
-            ? identityData.id.trim()
-            : null;
-        if (id) {
-          discordId = id;
-        }
-        break;
-      }
-    }
+    supabaseUserId = rawUserId;
+    discordId = extractDiscordIdFromUser(user);
   } catch (authError) {
     console.error('Unexpected error while validating Supabase access token', authError);
     return jsonError('Unauthorized', 401);
