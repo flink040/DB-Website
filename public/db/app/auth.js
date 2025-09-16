@@ -236,7 +236,7 @@ export const initializeAuth = async () => {
     let profile = null;
     if (session?.user) {
       profile = mapUserToProfile(session.user);
-    } else {
+    } else if (session) {
       const { data: userData, error: userError } = await client.auth.getUser();
       if (userError) {
         if (userError.message && !/Invalid token/i.test(userError.message)) {
