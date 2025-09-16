@@ -36,15 +36,6 @@ const setFormBusy = (busy) => {
   }
 };
 
-const toIsoString = (value) => {
-  if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  const date = new Date(trimmed);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString();
-};
-
 const collectFormData = () => {
   const form = elements.addItemForm;
   if (!form) {
@@ -55,7 +46,6 @@ const collectFormData = () => {
   const name = typeof data.get('name') === 'string' ? data.get('name').trim() : '';
   const type = typeof data.get('type') === 'string' ? data.get('type').trim() : '';
   const rarity = typeof data.get('rarity') === 'string' ? data.get('rarity').trim() : '';
-  const releasedAtRaw = typeof data.get('released_at') === 'string' ? data.get('released_at').trim() : '';
 
   if (!name) {
     throw new Error('Bitte einen Namen angeben.');
@@ -67,23 +57,18 @@ const collectFormData = () => {
     throw new Error('Bitte eine Seltenheit auswählen.');
   }
 
-  const releasedAt = toIsoString(releasedAtRaw);
-  if (!releasedAt) {
-    throw new Error('Bitte ein gültiges Veröffentlichungsdatum angeben.');
-  }
-
   const payload = {
     name,
     type,
     rarity,
-    released_at: releasedAt
+    released_at: new Date().toISOString()
   };
 
   const starsValue = typeof data.get('stars') === 'string' ? data.get('stars').trim() : '';
   if (starsValue) {
     const stars = Number(starsValue);
-    if (!Number.isFinite(stars) || stars < 0) {
-      throw new Error('Bitte eine gültige Sternanzahl angeben.');
+    if (!Number.isFinite(stars) || stars < 0 || stars > 3) {
+      throw new Error('Bitte eine gültige Sternanzahl zwischen 0 und 3 angeben.');
     }
     payload.stars = stars;
   }
