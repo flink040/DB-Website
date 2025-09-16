@@ -115,6 +115,20 @@ export const initializeEvents = () => {
 
   if (elements.authLoginButton) {
     elements.authLoginButton.addEventListener('click', async () => {
+      const authState = state.auth ?? {};
+      const hasProfile = Boolean(authState.profile);
+      const status = authState.status ?? 'idle';
+      if (hasProfile) {
+        if (status === 'loading' || status === 'signing-in' || status === 'signing-out') {
+          return;
+        }
+        authState.menuOpen = !authState.menuOpen;
+        render();
+        return;
+      }
+      if (status === 'loading' || status === 'signing-in') {
+        return;
+      }
       try {
         await signInWithDiscord();
       } catch (error) {
@@ -123,8 +137,24 @@ export const initializeEvents = () => {
     });
   }
 
+  if (elements.authProfileButton) {
+    elements.authProfileButton.addEventListener('click', () => {
+      const authState = state.auth ?? {};
+      if (!authState.profile || authState.status === 'signing-out') {
+        return;
+      }
+      const detail = { profile: authState.profile };
+      document.dispatchEvent(new CustomEvent('auth:profile', { detail }));
+      authState.menuOpen = false;
+      render();
+    });
+  }
+
   if (elements.authLogoutButton) {
     elements.authLogoutButton.addEventListener('click', async () => {
+      const authState = state.auth ?? {};
+      authState.menuOpen = false;
+      render();
       try {
         await signOut();
       } catch (error) {
@@ -132,4 +162,32 @@ export const initializeEvents = () => {
       }
     });
   }
+
+  document.addEventListener('pointerdown', (event) => {
+    const authState = state.auth ?? {};
+    if (!authState.menuOpen) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (target.closest('#authPanel')) {
+      return;
+    }
+    authState.menuOpen = false;
+    render();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    const authState = state.auth ?? {};
+    if (!authState.menuOpen) {
+      return;
+    }
+    authState.menuOpen = false;
+    render();
+  });
 };

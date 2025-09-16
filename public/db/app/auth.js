@@ -126,12 +126,18 @@ const applyAuthState = (updates) => {
   }
   if ('profile' in updates) {
     authState.profile = updates.profile ?? null;
+    if (!updates.profile) {
+      authState.menuOpen = false;
+    }
   }
   if ('error' in updates) {
     authState.error = updates.error ?? '';
   }
   if ('session' in updates) {
     authState.session = updates.session ?? null;
+  }
+  if ('menuOpen' in updates) {
+    authState.menuOpen = Boolean(updates.menuOpen);
   }
   render();
 };
@@ -188,7 +194,7 @@ const syncProfileWithServer = async (session, profile) => {
 };
 
 export const initializeAuth = async () => {
-  applyAuthState({ status: 'loading', error: '', session: null, profile: null });
+  applyAuthState({ status: 'loading', error: '', session: null, profile: null, menuOpen: false });
   let pendingAuthError = '';
   let codeFromQuery = '';
   try {
@@ -218,7 +224,7 @@ export const initializeAuth = async () => {
         paramsToDelete.push('code');
       }
       if (pendingAuthError) {
-        applyAuthState({ error: pendingAuthError });
+        applyAuthState({ error: pendingAuthError, menuOpen: false });
       }
       if (paramsToDelete.length && typeof window.history?.replaceState === 'function') {
         paramsToDelete.forEach((name) => params.delete(name));
@@ -258,7 +264,13 @@ export const initializeAuth = async () => {
     }
     const hasSessionOrProfile = Boolean(session) || Boolean(profile);
     const nextErrorMessage = hasSessionOrProfile ? '' : pendingAuthError;
-    applyAuthState({ status: 'ready', profile, session, error: nextErrorMessage });
+    applyAuthState({
+      status: 'ready',
+      profile,
+      session,
+      error: nextErrorMessage,
+      menuOpen: false,
+    });
     client.auth.onAuthStateChange((_event, nextSession) => {
       const nextProfile = mapUserToProfile(nextSession?.user ?? null);
       const nextError = nextSession ? '' : state.auth?.error ?? '';
@@ -267,6 +279,7 @@ export const initializeAuth = async () => {
         profile: nextProfile,
         session: nextSession ?? null,
         error: nextError,
+        menuOpen: false,
       });
       if (nextSession) {
         void syncProfileWithServer(nextSession, nextProfile);
@@ -280,14 +293,20 @@ export const initializeAuth = async () => {
       error instanceof Error && error.message
         ? error.message
         : 'Anmeldung konnte nicht initialisiert werden.';
-    applyAuthState({ status: 'error', profile: null, session: null, error: message });
+    applyAuthState({
+      status: 'error',
+      profile: null,
+      session: null,
+      error: message,
+      menuOpen: false,
+    });
   }
 };
 
 export const signInWithDiscord = async () => {
   const client = await getClient();
   const { discordRedirectUri } = await loadConfig();
-  applyAuthState({ status: 'signing-in', error: '' });
+  applyAuthState({ status: 'signing-in', error: '', menuOpen: false });
   try {
     const { error } = await client.auth.signInWithOAuth({
       provider: 'discord',
@@ -304,26 +323,26 @@ export const signInWithDiscord = async () => {
       error instanceof Error && error.message
         ? error.message
         : 'Anmeldung mit Discord fehlgeschlagen.';
-    applyAuthState({ status: 'ready', error: message });
+    applyAuthState({ status: 'ready', error: message, menuOpen: false });
     throw error;
   }
 };
 
 export const signOut = async () => {
   const client = await getClient();
-  applyAuthState({ status: 'signing-out' });
+  applyAuthState({ status: 'signing-out', menuOpen: false });
   try {
     const { error } = await client.auth.signOut();
     if (error) {
       throw error;
     }
-    applyAuthState({ status: 'ready', profile: null, session: null, error: '' });
+    applyAuthState({ status: 'ready', profile: null, session: null, error: '', menuOpen: false });
   } catch (error) {
     const message =
       error instanceof Error && error.message
         ? error.message
         : 'Abmeldung fehlgeschlagen.';
-    applyAuthState({ status: 'ready', error: message });
+    applyAuthState({ status: 'ready', error: message, menuOpen: false });
     throw error;
   }
 };
