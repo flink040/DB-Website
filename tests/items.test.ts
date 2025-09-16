@@ -132,21 +132,21 @@ test('items API returns items and a next cursor from Supabase results', async ()
       id: 'item-3',
       name: 'Item Three',
       type: 'weapon',
-      rarity: 'legendary',
+      rarity: 'mega-jackpot',
       released_at: '2023-03-10T00:00:00.000Z',
     },
     {
       id: 'item-2',
       name: 'Item Two',
       type: 'weapon',
-      rarity: 'rare',
+      rarity: 'legendaer',
       released_at: '2023-03-09T00:00:00.000Z',
     },
     {
       id: 'item-1',
       name: 'Item One',
       type: 'weapon',
-      rarity: 'common',
+      rarity: 'selten',
       released_at: '2023-03-08T00:00:00.000Z',
     },
   ];
@@ -177,7 +177,7 @@ test('items API rejects POST requests without a valid bearer token', async () =>
     body: JSON.stringify({
       name: 'Unauthorized Item',
       type: 'weapon',
-      rarity: 'rare',
+      rarity: 'jackpot',
       released_at: '2024-01-01T00:00:00Z',
     }),
   });
@@ -201,7 +201,7 @@ test('items API validates POST request payloads', async () => {
     body: JSON.stringify({
       name: '  ',
       type: 'weapon',
-      rarity: 'rare',
+      rarity: 'jackpot',
     }),
   });
 
@@ -219,7 +219,7 @@ test('items API inserts new items via POST requests', async () => {
     id: 'item-123',
     name: 'Test Item',
     type: 'weapon',
-    rarity: 'rare',
+    rarity: 'jackpot',
     released_at: '2024-01-01T00:00:00.000Z',
   };
 
@@ -234,7 +234,7 @@ test('items API inserts new items via POST requests', async () => {
     body: JSON.stringify({
       name: '  Test Item  ',
       type: 'weapon',
-      rarity: 'rare',
+      rarity: 'jackpot',
       released_at: '2024-01-01T00:00:00Z',
     }),
   });
@@ -257,7 +257,7 @@ test('items API inserts new items via POST requests', async () => {
     {
       name: 'Test Item',
       type: 'weapon',
-      rarity: 'rare',
+      rarity: 'jackpot',
       released_at: '2024-01-01T00:00:00.000Z',
     },
   ]);

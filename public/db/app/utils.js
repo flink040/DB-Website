@@ -20,9 +20,68 @@ export const normalizeFilterValue = (value) => {
   return '';
 };
 
+const normalizeRarityValue = (value) => {
+  const normalized = normalizeFilterValue(value);
+  if (!normalized) return '';
+  const replaced = normalized
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss');
+  const withoutDiacritics = replaced.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return withoutDiacritics.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+};
+
+const rarityAliasToKey = new Map();
+const rarityKeyToLabel = new Map();
+
+const registerRarityAlias = (alias, key) => {
+  if (!alias || !key) return;
+  const normalized = normalizeRarityValue(alias);
+  if (!normalized) return;
+  rarityAliasToKey.set(normalized, key);
+};
+
+const RARITY_DEFINITIONS = [
+  { key: 'selten', label: 'Selten', aliases: ['rare'] },
+  { key: 'episch', label: 'Episch', aliases: ['epic'] },
+  { key: 'unbezahlbar', label: 'Unbezahlbar', aliases: ['priceless'] },
+  { key: 'legendaer', label: 'Legendär', aliases: ['legendary', 'legendär', 'legendar'] },
+  { key: 'jackpot', label: 'Jackpot', aliases: [] },
+  { key: 'mega-jackpot', label: 'Mega Jackpot', aliases: ['mythic', 'mega jackpot', 'megajackpot', 'mega_jackpot'] },
+];
+
+for (const rarity of RARITY_DEFINITIONS) {
+  rarityKeyToLabel.set(rarity.key, rarity.label);
+  registerRarityAlias(rarity.key, rarity.key);
+  registerRarityAlias(rarity.label, rarity.key);
+  registerRarityAlias(rarity.label.replace(/\s+/g, ''), rarity.key);
+  registerRarityAlias(rarity.label.replace(/\s+/g, '-'), rarity.key);
+  if (Array.isArray(rarity.aliases)) {
+    for (const alias of rarity.aliases) {
+      registerRarityAlias(alias, rarity.key);
+    }
+  }
+}
+
+export const getRarityKey = (value) => {
+  const normalized = normalizeRarityValue(value);
+  if (!normalized) return '';
+  return rarityAliasToKey.get(normalized) ?? normalized;
+};
+
+export const getRarityLabel = (value) => {
+  const key = getRarityKey(value);
+  if (!key) return null;
+  return rarityKeyToLabel.get(key) ?? null;
+};
+
 export const formatLabel = (value) => {
   const typeLabel = getItemTypeLabel(value);
   if (typeLabel) return typeLabel;
+
+  const rarityLabel = getRarityLabel(value);
+  if (rarityLabel) return rarityLabel;
 
   let normalized = '';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') {

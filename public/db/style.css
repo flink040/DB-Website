@@ -340,34 +340,34 @@ select {
   color: rgba(191, 219, 254, 0.88);
 }
 
-.rarity-badge[data-rarity='common'] {
-  background: rgba(148, 163, 184, 0.18);
-  color: rgba(226, 232, 240, 0.75);
-}
-
-.rarity-badge[data-rarity='uncommon'] {
-  background: rgba(34, 197, 94, 0.16);
-  color: rgba(187, 247, 208, 0.9);
-}
-
-.rarity-badge[data-rarity='rare'] {
+.rarity-badge[data-rarity='selten'] {
   background: rgba(59, 130, 246, 0.16);
   color: rgba(191, 219, 254, 0.88);
 }
 
-.rarity-badge[data-rarity='epic'] {
+.rarity-badge[data-rarity='episch'] {
   background: rgba(129, 140, 248, 0.18);
   color: rgba(199, 210, 254, 0.95);
 }
 
-.rarity-badge[data-rarity='legendary'] {
+.rarity-badge[data-rarity='unbezahlbar'] {
+  background: rgba(13, 148, 136, 0.18);
+  color: rgba(167, 243, 208, 0.92);
+}
+
+.rarity-badge[data-rarity='legendaer'] {
   background: rgba(245, 158, 11, 0.22);
   color: rgba(253, 230, 138, 0.95);
 }
 
-.rarity-badge[data-rarity='mythic'] {
+.rarity-badge[data-rarity='jackpot'] {
   background: rgba(236, 72, 153, 0.22);
   color: rgba(251, 207, 232, 0.92);
+}
+
+.rarity-badge[data-rarity='mega-jackpot'] {
+  background: rgba(250, 204, 21, 0.28);
+  color: rgba(254, 243, 199, 0.95);
 }
 
 .item-card__type {
