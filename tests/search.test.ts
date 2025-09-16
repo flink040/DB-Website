@@ -1,9 +1,11 @@
 import test from 'node:test';
 import * as assert from 'node:assert/strict';
 import { onRequest } from '../functions/api/search';
-import * as supabase from '@supabase/supabase-js';
+import * as supabaseStub from './stubs/supabase-js';
+import { __setSupabaseClientFactory } from '../lib/supabase';
 
-const supabaseStub: any = supabase;
+__setSupabaseClientFactory(supabaseStub.createClient);
+supabaseStub.__resetSupabaseState();
 
 let envCounter = 0;
 

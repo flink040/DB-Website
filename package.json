@@ -8,7 +8,7 @@
     "lib": "lib"
   },
   "scripts": {
-    "test": "tsc --project tsconfig.json && node --require ./tests/test-setup.cjs --test dist/tests"
+    "test": "tsc --project tsconfig.json && node --test dist/tests"
   },
   "keywords": [],
   "author": "",

@@ -9,7 +9,20 @@ export interface SupabaseClientOptions {
   accessToken?: string;
 }
 
+export type SupabaseClientFactory = typeof createClient;
+
 const clientCache = new Map<string, SupabaseClient>();
+let createClientFactory: SupabaseClientFactory = createClient;
+
+export function __setSupabaseClientFactory(factory: SupabaseClientFactory): void {
+  createClientFactory = factory;
+  clientCache.clear();
+}
+
+export function __resetSupabaseClientFactory(): void {
+  createClientFactory = createClient;
+  clientCache.clear();
+}
 
 const buildClient = (
   url: string,
@@ -24,7 +37,7 @@ const buildClient = (
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  return createClient(url, anonKey, {
+  return createClientFactory(url, anonKey, {
     auth: { persistSession: false },
     global: {
       headers,
