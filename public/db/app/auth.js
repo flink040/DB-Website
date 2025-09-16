@@ -181,6 +181,8 @@ const getClient = async () => {
       createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
           persistSession: true,
+          flowType: 'pkce',
+          detectSessionInUrl: false,
         },
       })
     );
