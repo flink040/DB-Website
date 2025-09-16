@@ -2,7 +2,7 @@ const states = new Map();
 
 function ensureState(cacheKey) {
   if (!states.has(cacheKey)) {
-    states.set(cacheKey, { responseQueue: [], queryLog: [] });
+    states.set(cacheKey, { responseQueue: [], queryLog: [], authQueue: [], lastAuthToken: null });
   }
 
   return states.get(cacheKey);
@@ -22,6 +22,14 @@ function dequeueResponse(cacheKey, table, steps, defaultResponse) {
   state.queryLog.push({ table, steps: cloneSteps(steps) });
 
   return response;
+}
+
+function dequeueAuthResponse(cacheKey) {
+  const state = ensureState(cacheKey);
+  if (state.authQueue.length > 0) {
+    return state.authQueue.shift();
+  }
+  return { data: { user: null }, error: null };
 }
 
 function createQueryBuilder(cacheKey, table) {
@@ -90,12 +98,24 @@ function createClient(url = '', key = '') {
     from(table) {
       return createQueryBuilder(cacheKey, table);
     },
+    auth: {
+      getUser(accessToken) {
+        const state = ensureState(cacheKey);
+        state.lastAuthToken = accessToken ?? null;
+        return Promise.resolve(dequeueAuthResponse(cacheKey));
+      },
+    },
   };
 }
 
 function resetState(cacheKey) {
   if (cacheKey) {
-    states.set(cacheKey, { responseQueue: [], queryLog: [] });
+    states.set(cacheKey, {
+      responseQueue: [],
+      queryLog: [],
+      authQueue: [],
+      lastAuthToken: null,
+    });
     return;
   }
 
@@ -105,6 +125,11 @@ function resetState(cacheKey) {
 function queueResponse(cacheKey, response = { data: [], error: null }) {
   const state = ensureState(cacheKey);
   state.responseQueue.push(response);
+}
+
+function queueAuthResponse(cacheKey, response = { data: { user: null }, error: null }) {
+  const state = ensureState(cacheKey);
+  state.authQueue.push(response);
 }
 
 function getLastQuery(cacheKey) {
@@ -118,6 +143,11 @@ function getLastQuery(cacheKey) {
     table: entry.table,
     steps: cloneSteps(entry.steps),
   };
+}
+
+function getLastAuthToken(cacheKey) {
+  const state = ensureState(cacheKey);
+  return state.lastAuthToken;
 }
 
 function getQueryLog(cacheKey) {
@@ -141,7 +171,9 @@ function getQueryLog(cacheKey) {
 module.exports = {
   createClient,
   __queueResponse: queueResponse,
+  __queueAuthResponse: queueAuthResponse,
   __resetSupabaseState: resetState,
   __getLastQuery: getLastQuery,
+  __getLastAuthToken: getLastAuthToken,
   __getQueryLog: getQueryLog,
 };

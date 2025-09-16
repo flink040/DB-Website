@@ -19,7 +19,8 @@ interface Item {
 }
 
 interface ItemsApiEnv {
-  ITEMS_API_TOKEN?: string;
+  ITEMS_CREATED_BY_COLUMN?: string;
+  ITEMS_DISCORD_ID_COLUMN?: string;
 }
 
 type Env = SupabaseEnv & CacheEnv & ItemsApiEnv;
@@ -158,18 +159,61 @@ const validateNewItemPayload = (payload: unknown): ValidationResult => {
 };
 
 const handlePostRequest = async (request: Request, env: Env): Promise<Response> => {
-  const token = env.ITEMS_API_TOKEN;
+  const accessToken = extractBearerToken(request.headers.get('Authorization'));
 
-  if (!token) {
-    console.error('ITEMS_API_TOKEN is not configured; refusing POST /api/items request');
-    return jsonError(
-      'Bitte logge dich ein, bevor du Items zur Datenbank hinzufügst',
-      500
-    );
+  if (!accessToken) {
+    return jsonError('Unauthorized', 401);
   }
 
-  const providedToken = extractBearerToken(request.headers.get('Authorization'));
-  if (!providedToken || providedToken !== token) {
+  let authSupabase;
+  try {
+    authSupabase = getSupabaseClient(env);
+  } catch (clientError) {
+    console.error('Failed to initialise Supabase client for auth lookup', clientError);
+    return jsonError('Could not connect to the data service.', 500);
+  }
+
+  let supabaseUserId: string | null = null;
+  let discordId: string | null = null;
+
+  try {
+    const { data: authData, error: authError } = await authSupabase.auth.getUser(accessToken);
+    if (authError) {
+      console.warn('Supabase rejected provided access token for create item request', {
+        message: authError.message,
+        status: authError.status,
+      });
+      return jsonError('Unauthorized', 401);
+    }
+
+    const user = authData?.user ?? null;
+    if (!user?.id) {
+      console.warn('Supabase auth returned no user for provided access token');
+      return jsonError('Unauthorized', 401);
+    }
+
+    supabaseUserId = user.id;
+
+    const identities = Array.isArray(user.identities) ? user.identities : [];
+    for (const identity of identities) {
+      if (identity?.provider === 'discord') {
+        const identityData = identity?.identity_data;
+        const id =
+          typeof identityData?.id === 'string' && identityData.id.trim()
+            ? identityData.id.trim()
+            : null;
+        if (id) {
+          discordId = id;
+        }
+        break;
+      }
+    }
+  } catch (authError) {
+    console.error('Unexpected error while validating Supabase access token', authError);
+    return jsonError('Unauthorized', 401);
+  }
+
+  if (!supabaseUserId) {
     return jsonError('Unauthorized', 401);
   }
 
@@ -189,11 +233,26 @@ const handlePostRequest = async (request: Request, env: Env): Promise<Response> 
     return jsonError(validationResult.error, 400);
   }
 
-  const insertPayload = validationResult.data;
+  const userId = supabaseUserId;
+  const insertPayload = { ...validationResult.data } as Record<string, unknown>;
+
+  const createdByColumn =
+    typeof env.ITEMS_CREATED_BY_COLUMN === 'string' && env.ITEMS_CREATED_BY_COLUMN.trim()
+      ? env.ITEMS_CREATED_BY_COLUMN.trim()
+      : 'created_by_user_id';
+  insertPayload[createdByColumn] = userId;
+
+  const discordColumn =
+    typeof env.ITEMS_DISCORD_ID_COLUMN === 'string' && env.ITEMS_DISCORD_ID_COLUMN.trim()
+      ? env.ITEMS_DISCORD_ID_COLUMN.trim()
+      : null;
+  if (discordId && discordColumn) {
+    insertPayload[discordColumn] = discordId;
+  }
 
   let supabase;
   try {
-    supabase = getSupabaseClient(env);
+    supabase = getSupabaseClient(env, { accessToken });
   } catch (clientError) {
     console.error(
       'Failed to initialise Supabase client for create item request',

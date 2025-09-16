@@ -15,8 +15,15 @@ declare module '@supabase/supabase-js' {
     maybeSingle<R = T>(): Promise<{ data: R | null; error: Error | null }>;
   }
 
+  interface SupabaseAuthClient {
+    getUser(
+      accessToken: string
+    ): Promise<{ data: { user: Record<string, unknown> | null }; error: Error | null }>;
+  }
+
   export interface SupabaseClient {
     from<T = unknown>(table: string): PostgrestQueryBuilder<T>;
+    auth: SupabaseAuthClient;
   }
 
   export function createClient(

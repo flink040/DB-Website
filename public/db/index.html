@@ -31,6 +31,24 @@
             autocomplete="off"
           />
         </form>
+        <div id="authPanel" class="auth-panel">
+          <div id="authUser" class="auth-panel__user" hidden aria-hidden="true">
+            <div class="auth-panel__avatar" id="authUserAvatar">
+              <img id="authUserAvatarImage" alt="" hidden />
+              <span class="auth-panel__avatar-fallback" aria-hidden="true"></span>
+            </div>
+            <div class="auth-panel__details">
+              <span id="authUserName" class="auth-panel__name"></span>
+              <button id="authLogoutButton" class="auth-panel__action auth-panel__logout" type="button">
+                Abmelden
+              </button>
+            </div>
+          </div>
+          <button id="authLoginButton" class="auth-panel__action auth-panel__login" type="button">
+            Mit Discord anmelden
+          </button>
+          <p id="authStatus" class="auth-panel__status" aria-live="polite" hidden></p>
+        </div>
       </div>
     </header>
 

@@ -5,9 +5,37 @@ export interface SupabaseEnv {
   SUPABASE_ANON_KEY: string;
 }
 
+export interface SupabaseClientOptions {
+  accessToken?: string;
+}
+
 const clientCache = new Map<string, SupabaseClient>();
 
-export function getSupabaseClient(env?: SupabaseEnv): SupabaseClient {
+const buildClient = (
+  url: string,
+  anonKey: string,
+  { accessToken }: SupabaseClientOptions = {}
+): SupabaseClient => {
+  const headers: Record<string, string> = {
+    'x-client-info': 'cloudflare-pages-functions',
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  return createClient(url, anonKey, {
+    auth: { persistSession: false },
+    global: {
+      headers,
+    },
+  });
+};
+
+export function getSupabaseClient(
+  env?: SupabaseEnv,
+  options: SupabaseClientOptions = {}
+): SupabaseClient {
   const SUPABASE_URL = env?.SUPABASE_URL ?? process.env.SUPABASE_URL;
   const SUPABASE_ANON_KEY = env?.SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY;
 
@@ -15,19 +43,15 @@ export function getSupabaseClient(env?: SupabaseEnv): SupabaseClient {
     throw new Error('Supabase configuration is missing.');
   }
 
+  if (options.accessToken) {
+    return buildClient(SUPABASE_URL, SUPABASE_ANON_KEY, options);
+  }
+
   const cacheKey = `${SUPABASE_URL}:${SUPABASE_ANON_KEY}`;
   let client = clientCache.get(cacheKey);
 
   if (!client) {
-    client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false },
-      global: {
-        headers: {
-          'x-client-info': 'cloudflare-pages-functions',
-        },
-      },
-    });
-
+    client = buildClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     clientCache.set(cacheKey, client);
   }
 
