@@ -91,7 +91,22 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     );
     const cursor = parseCursor(url.searchParams.get('cursor'));
 
-    const supabase = getSupabaseClient(env);
+    console.debug('Processing items request', {
+      limit,
+      cursor,
+    });
+
+    let supabase;
+    try {
+      supabase = getSupabaseClient(env);
+    } catch (clientError) {
+      console.error('Failed to initialise Supabase client for items request', clientError);
+      return {
+        data: { error: 'Could not connect to the data service.' },
+        status: 500,
+        skipCache: true,
+      };
+    }
 
     let query = supabase
       .from('items')
@@ -110,11 +125,30 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       query = query.lt('id', cursor.id);
     }
 
-    const { data, error } = await query;
-
-    if (error) {
+    let data: Item[] | null | undefined;
+    try {
+      const response = await query;
+      data = response.data as Item[] | null | undefined;
+      if (response.error) {
+        const { message, details, hint, code } = response.error;
+        console.error('Supabase returned an error when fetching items', {
+          message,
+          details,
+          hint,
+          code,
+          limit,
+          cursor,
+        });
+        return {
+          data: { error: 'Failed to retrieve items from the data service.' },
+          status: 500,
+          skipCache: true,
+        };
+      }
+    } catch (queryError) {
+      console.error('Unexpected error while executing Supabase query for items', queryError);
       return {
-        data: { error: error.message },
+        data: { error: 'Failed to retrieve items from the data service.' },
         status: 500,
         skipCache: true,
       };
@@ -127,6 +161,13 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const overflow = items.pop();
       nextCursor = buildCursor(overflow);
     }
+
+    console.debug('Items request succeeded', {
+      limit,
+      cursor,
+      returned: items.length,
+      hasNext: Boolean(nextCursor),
+    });
 
     return {
       data: {
