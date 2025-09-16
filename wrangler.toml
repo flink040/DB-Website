@@ -3,7 +3,7 @@ compatibility_date = "2023-12-01"
 pages_build_output_dir = "./public/db/"
 
 [vars]
-PUBLIC_SUPABASE_URL = "https://taejvzqmlswbgsknthxz.supabase.com"
+PUBLIC_SUPABASE_URL = "https://taejvzqmlswbgsknthxz.supabase.co"
 PUBLIC_SUPABASE_ANON_KEY = "{{ env:PUBLIC_SUPABASE_ANON_KEY }}"
 
 API_BASE = "https://db-website-24f.pages.dev"
