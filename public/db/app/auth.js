@@ -4,6 +4,7 @@ import { render } from './render.js';
 
 let configPromise = null;
 let clientPromise = null;
+let hasStrippedAuthHash = false;
 
 const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 Tage
 const LOGGED_IN_COOKIE_NAME = 'db_discord_logged_in';
@@ -261,6 +262,50 @@ const applyAuthState = (updates) => {
   render();
 };
 
+const stripAuthHashFromLocation = () => {
+  if (hasStrippedAuthHash) {
+    return;
+  }
+  hasStrippedAuthHash = true;
+
+  if (typeof window === 'undefined' || !window.location) {
+    return;
+  }
+
+  const rawHash = window.location.hash;
+  if (typeof rawHash !== 'string' || rawHash.length <= 1) {
+    return;
+  }
+
+  const trimmedHash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+  let containsSensitiveAuthData = false;
+
+  try {
+    const params = new URLSearchParams(trimmedHash);
+    for (const key of AUTH_HASH_SENSITIVE_KEYS) {
+      if (params.has(key)) {
+        containsSensitiveAuthData = true;
+        break;
+      }
+    }
+  } catch (error) {
+    const lowerCasedHash = trimmedHash.toLowerCase();
+    containsSensitiveAuthData =
+      lowerCasedHash.includes('access_token=') ||
+      lowerCasedHash.includes('refresh_token=') ||
+      lowerCasedHash.includes('provider_token=');
+  }
+
+  if (!containsSensitiveAuthData) {
+    return;
+  }
+
+  if (typeof window.history?.replaceState === 'function') {
+    const newUrl = `${window.location.pathname}${window.location.search}`;
+    window.history.replaceState(window.history.state, document.title, newUrl);
+  }
+};
+
 const syncProfileWithServer = async (session, profile) => {
   const accessToken =
     typeof session?.access_token === 'string' && session.access_token.trim()
@@ -415,6 +460,8 @@ export const initializeAuth = async () => {
       error: message,
       menuOpen: false,
     });
+  } finally {
+    stripAuthHashFromLocation();
   }
 };
 
