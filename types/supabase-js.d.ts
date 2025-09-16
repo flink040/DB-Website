@@ -32,3 +32,8 @@ declare module '@supabase/supabase-js' {
     options?: Record<string, unknown>
   ): SupabaseClient;
 }
+
+declare module 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm' {
+  export type { QueryResult, PostgrestQueryBuilder, SupabaseAuthClient, SupabaseClient } from '@supabase/supabase-js';
+  export { createClient } from '@supabase/supabase-js';
+}

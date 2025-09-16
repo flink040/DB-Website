@@ -1,6 +1,6 @@
 import test from 'node:test';
-import assert from 'node:assert/strict';
-import * as supabase from '@supabase/supabase-js';
+import * as assert from 'node:assert/strict';
+import * as supabase from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { onRequest } from '../functions/api/items';
 
 const supabaseStub: any = supabase;
@@ -235,7 +235,8 @@ test('items API validates POST request payloads', async () => {
   const body = await response.json();
 
   assert.equal(response.status, 400);
-  assert.match(body.error, /Invalid request body/);
+  const errorMessage = typeof body.error === 'string' ? body.error : '';
+  assert.equal(/Invalid request body/.test(errorMessage), true);
   assert.equal(supabaseStub.__getLastAuthToken(cacheKey), accessToken);
 });
 
@@ -283,7 +284,7 @@ test('items API inserts new items via POST requests', async () => {
   }
 
   const insertStep = lastQuery.steps.find((step: any) => step[0] === 'insert');
-  assert.ok(insertStep, 'Expected insert step to be recorded');
+  assert.equal(insertStep !== undefined, true, 'Expected insert step to be recorded');
   assert.deepEqual(insertStep[1], [
     {
       name: 'Test Item',

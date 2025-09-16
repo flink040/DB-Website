@@ -1,7 +1,7 @@
 import test from 'node:test';
-import assert from 'node:assert/strict';
+import * as assert from 'node:assert/strict';
 import { onRequest } from '../functions/api/search';
-import * as supabase from '@supabase/supabase-js';
+import * as supabase from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
 const supabaseStub: any = supabase;
 
